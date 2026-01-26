@@ -3,15 +3,25 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Отладка
+console.log('🔧 DATABASE_URL:', process.env.DATABASE_URL ? 
+  process.env.DATABASE_URL.replace(/:[^:@]+@/, ':****@') : 
+  'Не найден'
+);
+
+// Всегда используем SSL для Render
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 // Вспомогательная функция для запросов
-const query = async (client: PoolClient, text: string, params?: any[]): Promise<QueryResult> => {
+export const query = async (client: PoolClient, text: string, params?: any[]): Promise<QueryResult> => {
   return client.query(text, params);
 };
 
@@ -24,8 +34,29 @@ export const testConnection = async (): Promise<boolean> => {
     console.log('✅ PostgreSQL подключен успешно');
     console.log('📊 Версия PostgreSQL:', result.rows[0].version);
     return true;
-  } catch (error) {
-    console.error('❌ Ошибка подключения к PostgreSQL:', error);
+  } catch (error: any) {
+    console.error('❌ Ошибка подключения к PostgreSQL:', error.message);
+    console.error('🔧 Код ошибки:', error.code);
+    
+    // Попробуем альтернативный способ
+    if (error.code === '28000' || error.message.includes('SSL')) {
+      console.log('🔄 Пробуем альтернативный метод подключения...');
+      try {
+        // Создаем новый пул с явными параметрами SSL
+        const testPool = new Pool({
+          connectionString: process.env.DATABASE_URL + '?sslmode=require',
+          ssl: { rejectUnauthorized: false }
+        });
+        const testClient = await testPool.connect();
+        await testClient.query('SELECT 1');
+        testClient.release();
+        console.log('✅ SSL подключение успешно');
+        return true;
+      } catch (sslError: any) {
+        console.error('❌ SSL ошибка:', sslError.message);
+      }
+    }
+    
     return false;
   } finally {
     if (client) {
@@ -34,7 +65,7 @@ export const testConnection = async (): Promise<boolean> => {
   }
 };
 
-// Создание таблиц (исправленная версия)
+// Создание таблиц
 export const initDatabase = async (): Promise<void> => {
   const client: PoolClient = await pool.connect();
   
@@ -45,7 +76,7 @@ export const initDatabase = async (): Promise<void> => {
     // Включаем расширение pgcrypto
     await query(client, 'CREATE EXTENSION IF NOT EXISTS pgcrypto');
 
-    // Таблица пользователей (упрощенная, без gen_random_bytes)
+    // Таблица пользователей
     await query(client, `
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -149,9 +180,9 @@ export const initDatabase = async (): Promise<void> => {
 
     await query(client, 'COMMIT');
     console.log('✅ Таблицы созданы успешно');
-  } catch (error) {
+  } catch (error: any) {
     await query(client, 'ROLLBACK');
-    console.error('❌ Ошибка при создании таблиц:', error);
+    console.error('❌ Ошибка при создании таблиц:', error.message);
     throw error;
   } finally {
     client.release();
@@ -189,7 +220,9 @@ export const seedDatabase = async (): Promise<void> => {
       VALUES 
         ('AK-47 | Redline', 'AK-47', 'classified', 45.50, 15),
         ('Glock-18 | Water Elemental', 'Glock-18', 'mil-spec', 5.50, 5),
-        ('M4A1-S | Guardian', 'M4A1-S', 'restricted', 12.00, 8)
+        ('M4A1-S | Guardian', 'M4A1-S', 'restricted', 12.00, 8),
+        ('AWP | Asiimov', 'AWP', 'covert', 120.00, 20),
+        ('Desert Eagle | Blaze', 'Desert Eagle', 'classified', 85.00, 12)
       ON CONFLICT DO NOTHING
     `);
 
@@ -206,9 +239,9 @@ export const seedDatabase = async (): Promise<void> => {
     await query(client, 'COMMIT');
     console.log('✅ Тестовые данные успешно добавлены!');
     
-  } catch (error) {
+  } catch (error: any) {
     await query(client, 'ROLLBACK');
-    console.error('❌ Ошибка при заполнении данных:', error);
+    console.error('❌ Ошибка при заполнении данных:', error.message);
     throw error;
   } finally {
     client.release();
@@ -228,8 +261,8 @@ export const getDatabaseStats = async (): Promise<any> => {
     `);
 
     return result.rows[0];
-  } catch (error) {
-    console.error('Error getting database stats:', error);
+  } catch (error: any) {
+    console.error('Error getting database stats:', error.message);
     throw error;
   } finally {
     client.release();

@@ -11,25 +11,22 @@ import caseRoutes from './routes/case.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import marketRoutes from './routes/market.routes';
 
-// Импорт базы данных
+// Импорт исправленной базы данных
 import { pool, testConnection, initDatabase, seedDatabase } from './db/database';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const corsOptions = {
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://tg-frontend-7ltg.vercel.app/', // Ваш фронтенд на Vercel
-    'https://*.vercel.app'
-  ],
-  credentials: true
-};
+
 // Middleware
-app.use(helmet());
-app.use(cors(corsOptions));
+app.use(helmet({
+  contentSecurityPolicy: false, // Для разработки
+}));
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://*.vercel.app','https://tg-frontend-7ltg.vercel.app'],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -41,13 +38,18 @@ app.use('/api/cases', caseRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/market', marketRoutes);
 
-// Инициализация БД (для админов)
+// Инициализация БД
 app.get('/api/init-db', async (req, res) => {
   try {
     await initDatabase();
     res.json({ success: true, message: 'База данных инициализирована' });
-  } catch (error) {
-    res.status(500).json({ error: 'Ошибка инициализации БД' });
+  } catch (error: any) {
+    console.error('Init DB error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Ошибка инициализации БД',
+      details: error.message 
+    });
   }
 });
 
@@ -56,26 +58,31 @@ app.get('/api/seed-db', async (req, res) => {
   try {
     await seedDatabase();
     res.json({ success: true, message: 'Тестовые данные добавлены' });
-  } catch (error) {
-    res.status(500).json({ error: 'Ошибка заполнения БД' });
+  } catch (error: any) {
+    console.error('Seed DB error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Ошибка заполнения БД',
+      details: error.message 
+    });
   }
 });
 
 // Проверка подключения к БД
 app.get('/api/db-check', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
+    const isConnected = await testConnection();
     res.json({ 
-      success: true, 
-      status: 'connected',
+      success: isConnected,
+      status: isConnected ? 'connected' : 'disconnected',
       database: 'PostgreSQL',
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ 
       success: false,
-      status: 'disconnected',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      status: 'error',
+      error: error.message
     });
   }
 });
@@ -145,6 +152,39 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
+// Start server
+const startServer = async () => {
+  try {
+    console.log('🚀 Запуск сервера...');
+    
+    // Проверяем подключение к БД (но не блокируем запуск)
+    setTimeout(async () => {
+      try {
+        await testConnection();
+      } catch (error) {
+        console.log('⚠️  Предупреждение: Проблемы с подключением к БД');
+        console.log('   Сервер будет работать в ограниченном режиме');
+      }
+    }, 1000);
+
+    app.listen(PORT, () => {
+      console.log(`✅ Сервер запущен на http://localhost:${PORT}`);
+      console.log(`📊 API доступен на http://localhost:${PORT}/api`);
+      console.log(`❤️  Health check: http://localhost:${PORT}/health`);
+      console.log(`🔌 Проверка БД: http://localhost:${PORT}/api/db-check`);
+      console.log(`📁 Для инициализации БД: http://localhost:${PORT}/api/init-db`);
+      console.log(`🌱 Для заполнения данными: http://localhost:${PORT}/api/seed-db`);
+      console.log('\n📝 Примеры запросов:');
+      console.log(`   curl http://localhost:${PORT}/api/db-check`);
+      console.log(`   curl -X GET http://localhost:${PORT}/api/init-db`);
+      console.log(`   curl -X GET http://localhost:${PORT}/api/seed-db`);
+    });
+  } catch (error: any) {
+    console.error('❌ Ошибка запуска сервера:', error.message);
+    process.exit(1);
+  }
+};
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received. Closing database connection...');
@@ -157,32 +197,5 @@ process.on('SIGINT', async () => {
   await pool.end();
   process.exit(0);
 });
-
-// Start server
-const startServer = async () => {
-  try {
-    // Проверяем подключение к БД
-    const isConnected = await testConnection();
-    
-    if (!isConnected) {
-      console.log('⚠️  Предупреждение: Нет подключения к базе данных');
-      console.log('   Проверьте настройки PostgreSQL в .env файле');
-    } else {
-      console.log('✅ Подключение к PostgreSQL установлено');
-    }
-
-    app.listen(PORT, () => {
-      console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
-      console.log(`📊 API доступен на http://localhost:${PORT}/api`);
-      console.log(`❤️  Health check: http://localhost:${PORT}/health`);
-      console.log(`🔌 Проверка БД: http://localhost:${PORT}/api/db-check`);
-      console.log(`📁 Для инициализации БД: http://localhost:${PORT}/api/init-db`);
-      console.log(`🌱 Для заполнения данными: http://localhost:${PORT}/api/seed-db`);
-    });
-  } catch (error) {
-    console.error('❌ Ошибка запуска сервера:', error);
-    process.exit(1);
-  }
-};
 
 startServer();
