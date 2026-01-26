@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  telegramId    BigInt    @unique
+  username      String?   @db.VarChar(255)
+  firstName     String?   @db.VarChar(255)
+  lastName      String?   @db.VarChar(255)
+  avatarUrl     String?   @db.VarChar(500)
+  balance       Int       @default(0)
+  totalEarned   Int       @default(0)
+  dailyStreak   Int       @default(0)
+  lastDailyAt   DateTime?
+  referralCode  String    @unique @default(cuid()) @db.VarChar(50)
+  referredBy    String?   @db.VarChar(50)
+  createdAt     DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @db.Timestamp(6)
+  
+  // Relations
+  inventory     InventoryItem[]
+  transactions  Transaction[]
+  marketListings MarketListing[]
+  referrals     User[]          @relation("UserReferrals")
+  
+  @@index([telegramId])
+  @@map("users")
+}
+
+model Skin {
+  id                String    @id @default(cuid())
+  name              String    @db.VarChar(255)
+  weapon            String    @db.VarChar(100)
+  rarity            String    @db.VarChar(50) // common, uncommon, rare, mythical, legendary
+  price             Float     @db.Decimal(10, 2)
+  imageUrl          String?   @db.VarChar(500)
+  fragmentsRequired Int       @default(1)
+  isTradable        Boolean   @default(true)
+  createdAt         DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  inventoryItems    InventoryItem[]
+  caseDrops         CaseDrop[]
+  
+  @@map("skins")
+}
+
+model InventoryItem {
+  id          String    @id @default(cuid())
+  userId      String
+  skinId      String
+  name        String    @db.VarChar(255)
+  rarity      String    @db.VarChar(50)
+  imageUrl    String?   @db.VarChar(500)
+  isFragment  Boolean   @default(false)
+  fragments   Int       @default(1)
+  price       Float?    @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  skin        Skin      @relation(fields: [skinId], references: [id])
+  marketListing MarketListing?
+  
+  @@index([userId])
+  @@index([skinId])
+  @@map("inventory_items")
+}
+
+model Case {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(255)
+  type        String    @db.VarChar(50) // ad, standard, premium, sponsor
+  price       Int?      // null для ad-case
+  imageUrl    String?   @db.VarChar(500)
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  drops       CaseDrop[]
+  
+  @@index([type, isActive])
+  @@map("cases")
+}
+
+model CaseDrop {
+  id          String    @id @default(cuid())
+  caseId      String
+  skinId      String
+  probability Float     @default(0.01) @db.Decimal(5, 4)
+  isFragment  Boolean   @default(false)
+  fragments   Int       @default(1)
+  
+  // Relations
+  case        Case      @relation(fields: [caseId], references: [id])
+  skin        Skin      @relation(fields: [skinId], references: [id])
+  
+  @@unique([caseId, skinId, isFragment])
+  @@map("case_drops")
+}
+
+model Transaction {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String    @db.VarChar(50) // daily_reward, ad_watch, referral, case_open, market
+  amount      Int
+  metadata    Json?     @db.Json
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model MarketListing {
+  id          String    @id @default(cuid())
+  sellerId    String
+  itemId      String
+  price       Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  soldAt      DateTime? @db.Timestamp(6)
+  
+  // Relations
+  seller      User      @relation(fields: [sellerId], references: [id])
+  item        InventoryItem @relation(fields: [itemId], references: [id])
+  
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("market_listings")
+}
