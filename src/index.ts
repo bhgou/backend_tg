@@ -18,13 +18,18 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-
+const corsOptions = {
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://tg-frontend-7ltg.vercel.app/', // Ваш фронтенд на Vercel
+    'https://*.vercel.app'
+  ],
+  credentials: true
+};
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
-  credentials: true
-}));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
