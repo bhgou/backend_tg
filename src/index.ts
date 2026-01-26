@@ -10,6 +10,7 @@ import userRoutes from './routes/user.routes';
 import caseRoutes from './routes/case.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import marketRoutes from './routes/market.routes';
+import { startBot } from './bot/bot';
 
 // Импорт исправленной базы данных
 import { pool, testConnection, initDatabase, seedDatabase } from './db/database';
@@ -156,7 +157,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 const startServer = async () => {
   try {
     console.log('🚀 Запуск сервера...');
-    
+    startBot();
     // Проверяем подключение к БД (но не блокируем запуск)
     setTimeout(async () => {
       try {
