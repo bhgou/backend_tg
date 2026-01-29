@@ -3,9 +3,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const FRONTEND_URL = process.env.FRONTEND_URL;
+
 if (!BOT_TOKEN) {
-  throw new Error('BOT_TOKEN не установлен в .env');
+  throw new Error('TELEGRAM_BOT_TOKEN не установлен в .env');
+}
+
+if (!FRONTEND_URL) {
+  throw new Error('FRONTEND_URL не установлен в .env');
 }
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -19,11 +25,11 @@ bot.start((ctx) => {
         inline_keyboard: [
           [{
             text: '🎮 Открыть приложение',
-            web_app: { url: 'https://your-frontend-url.com' }
+            web_app: { url: FRONTEND_URL }
           }],
           [{
             text: '📱 Открыть на телефоне',
-            url: 'https://t.me/your_bot_username?startapp=skin_factory'
+            url: `https://t.me/${bot.botInfo?.username}?startapp=skin_factory`
           }]
         ]
       }
@@ -37,7 +43,7 @@ bot.command('play', (ctx) => {
     reply_markup: {
       inline_keyboard: [[{
         text: '🎮 Играть',
-        web_app: { url: 'https://your-frontend-url.com' }
+        web_app: { url: FRONTEND_URL }
       }]]
     }
   });
@@ -56,6 +62,7 @@ export const startBot = () => {
     .then(() => {
       console.log('🤖 Telegram бот запущен');
       console.log('🔗 Ссылка на бота:', `https://t.me/${bot.botInfo?.username}`);
+      console.log('🌐 FRONTEND_URL:', FRONTEND_URL);
     })
     .catch((error) => {
       console.error('❌ Ошибка запуска бота:', error);
