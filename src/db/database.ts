@@ -117,7 +117,7 @@ export const initDatabase = async (): Promise<void> => {
       );
     `);
 
-    // Таблица дропов кейсов
+    // Таблица дропов кейсов (ОБНОВЛЕНА - добавлена колонка drop_type)
     await query(client, `
       CREATE TABLE IF NOT EXISTS case_drops (
         id SERIAL PRIMARY KEY,
@@ -126,7 +126,7 @@ export const initDatabase = async (): Promise<void> => {
         probability DECIMAL(5,4) DEFAULT 0.01,
         is_fragment BOOLEAN DEFAULT false,
         fragments INTEGER DEFAULT 1,
-        drop_type VARCHAR(50) DEFAULT 'regular' -- regular, fragment, real_skin_fragment
+        drop_type VARCHAR(50) DEFAULT 'regular'
       );
     `);
 
