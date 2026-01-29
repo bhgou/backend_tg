@@ -1,0 +1,9 @@
+{
+  "watch": ["**/*.ts", "**/*.js"],
+  "ignore": ["node_modules", "dist", "client"],
+  "ext": "ts,js,json",
+  "exec": "ts-node index.ts",
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

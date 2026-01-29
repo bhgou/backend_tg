@@ -33,7 +33,7 @@ export interface Skin {
 export interface InventoryItem {
   id: number;
   user_id: number;
-  skin_id: number;
+  skin_id: number | null;
   name: string;
   rarity: string;
   image_url: string | null;
@@ -62,10 +62,11 @@ export interface Case {
 export interface CaseDrop {
   id: number;
   case_id: number;
-  skin_id: number;
+  skin_id: number | null;
   probability: number;
   is_fragment: boolean;
   fragments: number;
+  drop_type: string;
   skin_name?: string;
   rarity?: string;
   weapon?: string;
@@ -102,13 +103,70 @@ export interface MarketListing {
   seller_name?: string;
 }
 
+// Типы для каналов
+export interface Channel {
+  id: number;
+  name: string;
+  username: string | null;
+  invite_link: string;
+  reward_type: string;
+  reward_value: number;
+  is_active: boolean;
+  required: boolean;
+  created_at: string;
+}
+
+// Типы для подписок
+export interface UserSubscription {
+  id: number;
+  user_id: number;
+  channel_id: number;
+  telegram_username: string | null;
+  subscribed_at: string;
+  verified: boolean;
+  reward_claimed: boolean;
+}
+
+// Типы для реальных скинов
+export interface RealSkin {
+  id: number;
+  steam_market_id: string | null;
+  name: string;
+  weapon: string;
+  rarity: string;
+  exterior: string | null;
+  float_value: number | null;
+  steam_price: number;
+  image_url: string;
+  fragments_required: number;
+  tradeable: boolean;
+  is_stattrak: boolean;
+  is_souvenir: boolean;
+  created_at: string;
+}
+
+// Типы для заявок на вывод
+export interface WithdrawalRequest {
+  id: number;
+  user_id: number;
+  real_skin_id: number;
+  steam_trade_link: string;
+  status: string;
+  fragments_used: number;
+  admin_notes: string | null;
+  created_at: string;
+  processed_at: string | null;
+}
+
 // Типы для JWT
 export interface JwtPayload {
   userId: number;
   telegramId: string;
+  iat?: number;
+  exp?: number;
 }
 
-// Типы для запросов
+// Типы для запросов аутентификации
 export interface AuthRequest {
   telegramId: string;
   username?: string;
@@ -118,7 +176,7 @@ export interface AuthRequest {
   referralCode?: string;
 }
 
-// Типы для ответов
+// Типы для ответов API
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;

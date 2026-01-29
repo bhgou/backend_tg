@@ -10,9 +10,11 @@ import userRoutes from './routes/user.routes';
 import caseRoutes from './routes/case.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import marketRoutes from './routes/market.routes';
+import channelRoutes from './routes/channels.routes';
+import realSkinRoutes from './routes/realSkins.routes';
 import { startBot } from './bot/bot';
 
-// Импорт исправленной базы данных
+// Импорт базы данных
 import { pool, testConnection, initDatabase, seedDatabase } from './db/database';
 
 dotenv.config();
@@ -22,14 +24,14 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Для разработки
+  contentSecurityPolicy: false,
 }));
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://*.vercel.app','https://tg-frontend-7ltg.vercel.app'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://*.vercel.app'],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
 // API Routes
@@ -38,6 +40,11 @@ app.use('/api/user', userRoutes);
 app.use('/api/cases', caseRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/market', marketRoutes);
+app.use('/api/channels', channelRoutes);
+app.use('/api/real-skins', realSkinRoutes);
+
+// Статические файлы для изображений скинов
+app.use('/uploads', express.static('uploads'));
 
 // Инициализация БД
 app.get('/api/init-db', async (req, res) => {
@@ -93,7 +100,7 @@ app.get('/api', (req, res) => {
   res.json({
     success: true,
     name: 'CS:GO Skin Factory API',
-    version: '1.0.0',
+    version: '2.0.0',
     endpoints: {
       auth: {
         login: 'POST /api/auth/login',
@@ -119,6 +126,15 @@ app.get('/api', (req, res) => {
         listings: 'GET /api/market',
         buy: 'POST /api/market/buy',
         history: 'GET /api/market/history'
+      },
+      channels: {
+        list: 'GET /api/channels',
+        check: 'POST /api/channels/check-subscriptions',
+        claim: 'POST /api/channels/claim-reward'
+      },
+      realSkins: {
+        list: 'GET /api/real-skins',
+        withdraw: 'POST /api/real-skins/withdraw'
       }
     }
   });
@@ -157,14 +173,21 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 const startServer = async () => {
   try {
     console.log('🚀 Запуск сервера...');
+    
+    // Запуск бота
     startBot();
-    // Проверяем подключение к БД (но не блокируем запуск)
+    
+    // Проверяем подключение к БД
     setTimeout(async () => {
       try {
-        await testConnection();
+        const isConnected = await testConnection();
+        if (isConnected) {
+          console.log('✅ Подключение к БД успешно');
+        } else {
+          console.log('⚠️  Проблемы с подключением к БД');
+        }
       } catch (error) {
-        console.log('⚠️  Предупреждение: Проблемы с подключением к БД');
-        console.log('   Сервер будет работать в ограниченном режиме');
+        console.log('⚠️  Ошибка подключения к БД:', error);
       }
     }, 1000);
 
@@ -175,10 +198,6 @@ const startServer = async () => {
       console.log(`🔌 Проверка БД: http://localhost:${PORT}/api/db-check`);
       console.log(`📁 Для инициализации БД: http://localhost:${PORT}/api/init-db`);
       console.log(`🌱 Для заполнения данными: http://localhost:${PORT}/api/seed-db`);
-      console.log('\n📝 Примеры запросов:');
-      console.log(`   curl http://localhost:${PORT}/api/db-check`);
-      console.log(`   curl -X GET http://localhost:${PORT}/api/init-db`);
-      console.log(`   curl -X GET http://localhost:${PORT}/api/seed-db`);
     });
   } catch (error: any) {
     console.error('❌ Ошибка запуска сервера:', error.message);

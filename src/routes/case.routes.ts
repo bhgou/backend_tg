@@ -15,10 +15,10 @@ router.get('/', async (req: Request, res: Response) => {
        FROM cases c 
        WHERE c.is_active = true 
        ORDER BY 
-         CASE c.type 
-           WHEN 'ad' THEN 1
-           WHEN 'standard' THEN 2
-           WHEN 'premium' THEN 3
+         CASE 
+           WHEN c.type = 'ad' THEN 1
+           WHEN c.type = 'standard' THEN 2
+           WHEN c.type = 'premium' THEN 3
            ELSE 4
          END`
     );
