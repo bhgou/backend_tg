@@ -95,6 +95,123 @@ app.get('/api/db-check', async (req, res) => {
   }
 });
 
+// ФИКС: Исправление структуры базы данных
+app.get('/api/fix-database', async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    console.log('🔄 Исправление структуры базы данных...');
+    
+    // 1. Проверяем и добавляем колонку drop_type если её нет
+    const checkColumnQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'case_drops' AND column_name = 'drop_type'
+    `;
+    
+    const columnCheck = await client.query(checkColumnQuery);
+    
+    if (columnCheck.rows.length === 0) {
+      console.log('➕ Добавляем колонку drop_type в case_drops...');
+      await client.query(`
+        ALTER TABLE case_drops 
+        ADD COLUMN drop_type VARCHAR(50) DEFAULT 'regular'
+      `);
+    }
+    
+    // 2. Очищаем старые данные для перезаполнения
+    await client.query('DELETE FROM case_drops');
+    await client.query('DELETE FROM inventory_items');
+    await client.query('DELETE FROM transactions');
+    await client.query('DELETE FROM market_listings');
+    await client.query('DELETE FROM user_subscriptions');
+    await client.query('DELETE FROM withdrawal_requests');
+    await client.query('DELETE FROM real_skin_fragments');
+    
+    await client.query('COMMIT');
+    
+    console.log('✅ Структура базы данных исправлена');
+    
+    // Теперь можем заполнить данными
+    await seedDatabase();
+    
+    res.json({ 
+      success: true, 
+      message: 'База данных успешно исправлена и заполнена' 
+    });
+    
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('❌ Ошибка исправления БД:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Ошибка исправления БД',
+      details: error.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// ФИКС: Полный сброс базы данных
+app.get('/api/reset-db', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      console.log('🗑️  Удаление всех таблиц...');
+      
+      // Удаляем все таблицы в правильном порядке (чтобы избежать зависимостей)
+      await client.query('DROP TABLE IF EXISTS case_drops CASCADE');
+      await client.query('DROP TABLE IF EXISTS market_listings CASCADE');
+      await client.query('DROP TABLE IF EXISTS inventory_items CASCADE');
+      await client.query('DROP TABLE IF EXISTS transactions CASCADE');
+      await client.query('DROP TABLE IF EXISTS user_subscriptions CASCADE');
+      await client.query('DROP TABLE IF EXISTS withdrawal_requests CASCADE');
+      await client.query('DROP TABLE IF EXISTS real_skin_fragments CASCADE');
+      await client.query('DROP TABLE IF EXISTS channels CASCADE');
+      await client.query('DROP TABLE IF EXISTS cases CASCADE');
+      await client.query('DROP TABLE IF EXISTS skins CASCADE');
+      await client.query('DROP TABLE IF EXISTS real_skins CASCADE');
+      await client.query('DROP TABLE IF EXISTS sponsors CASCADE');
+      await client.query('DROP TABLE IF EXISTS users CASCADE');
+      
+      await client.query('COMMIT');
+      console.log('✅ Все таблицы удалены');
+      
+      // Создаём заново
+      console.log('🔄 Создание таблиц...');
+      await initDatabase();
+      
+      console.log('🌱 Заполнение данными...');
+      await seedDatabase();
+      
+      res.json({ 
+        success: true, 
+        message: 'База данных полностью пересоздана' 
+      });
+      
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    
+  } catch (error: any) {
+    console.error('Reset DB error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Ошибка сброса БД',
+      details: error.message 
+    });
+  }
+});
+
 // Информация о API
 app.get('/api', (req, res) => {
   res.json({
@@ -135,6 +252,13 @@ app.get('/api', (req, res) => {
       realSkins: {
         list: 'GET /api/real-skins',
         withdraw: 'POST /api/real-skins/withdraw'
+      },
+      database: {
+        check: 'GET /api/db-check',
+        init: 'GET /api/init-db',
+        seed: 'GET /api/seed-db',
+        fix: 'GET /api/fix-database',
+        reset: 'GET /api/reset-db'
       }
     }
   });
@@ -197,6 +321,8 @@ const startServer = async () => {
       console.log(`❤️  Health check: http://localhost:${PORT}/health`);
       console.log(`🔌 Проверка БД: http://localhost:${PORT}/api/db-check`);
       console.log(`📁 Для инициализации БД: http://localhost:${PORT}/api/init-db`);
+      console.log(`🔧 Для исправления БД: http://localhost:${PORT}/api/fix-database`);
+      console.log(`🗑️  Для полного сброса БД: http://localhost:${PORT}/api/reset-db`);
       console.log(`🌱 Для заполнения данными: http://localhost:${PORT}/api/seed-db`);
     });
   } catch (error: any) {
