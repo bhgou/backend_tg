@@ -1,21 +1,23 @@
+// market.routes.ts
 import express, { Request, Response } from 'express';
 import { pool } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { MarketListing, Transaction } from '../types';
+import { validateMarketListing } from '../middleware/validation';
 
 const router = express.Router();
 
-// Получение активных лотов (публичный доступ)
+// Получение лотов с пагинацией и фильтрацией
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { 
-      page = '1', 
-      limit = '20', 
-      rarity, 
-      weapon, 
-      minPrice, 
+    const {
+      page = '1',
+      limit = '20',
+      rarity,
+      weapon,
+      minPrice,
       maxPrice,
-      sortBy = 'newest' 
+      sortBy = 'newest',
+      search = ''
     } = req.query;
 
     const offset = (Number(page) - 1) * Number(limit);
@@ -29,39 +31,42 @@ router.get('/', async (req: Request, res: Response) => {
         ii.image_url,
         ii.is_fragment,
         ii.fragments,
-        u.username as seller_name
+        ii.price as item_price,
+        u.username as seller_username,
+        u.telegram_id as seller_telegram_id
       FROM market_listings ml
       JOIN inventory_items ii ON ml.item_id = ii.id
       JOIN users u ON ml.seller_id = u.id
-      WHERE ml.is_active = true
+      WHERE ml.is_active = true 
+      AND ml.expires_at > NOW()
     `;
 
     const params: any[] = [];
-    let paramCount = 0;
 
     // Фильтры
-    if (rarity) {
-      paramCount++;
-      query += ` AND ii.rarity = $${paramCount}`;
+    if (rarity && rarity !== 'all') {
       params.push(rarity);
+      query += ` AND ii.rarity = $${params.length}`;
     }
 
-    if (weapon) {
-      paramCount++;
-      query += ` AND ii.weapon = $${paramCount}`;
+    if (weapon && weapon !== 'all') {
       params.push(weapon);
+      query += ` AND ii.weapon = $${params.length}`;
     }
 
     if (minPrice) {
-      paramCount++;
-      query += ` AND ml.price >= $${paramCount}`;
       params.push(minPrice);
+      query += ` AND ml.price >= $${params.length}`;
     }
 
     if (maxPrice) {
-      paramCount++;
-      query += ` AND ml.price <= $${paramCount}`;
       params.push(maxPrice);
+      query += ` AND ml.price <= $${params.length}`;
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      query += ` AND (ii.name ILIKE $${params.length} OR u.username ILIKE $${params.length})`;
     }
 
     // Сортировка
@@ -81,262 +86,319 @@ router.get('/', async (req: Request, res: Response) => {
         break;
     }
 
-    // Пагинация
-    paramCount++;
-    query += ` LIMIT $${paramCount}`;
-    params.push(limit);
-
-    paramCount++;
-    query += ` OFFSET $${paramCount}`;
-    params.push(offset);
-
     // Получаем лоты
-    const listingsResult = await pool.query<MarketListing>(query, params);
-    const listings: MarketListing[] = listingsResult.rows;
+    params.push(limit, offset);
+    const listingsResult = await pool.query(
+      `${query} LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
 
     // Получаем общее количество
-    let countQuery = `
-      SELECT COUNT(*) 
-      FROM market_listings ml
-      JOIN inventory_items ii ON ml.item_id = ii.id
-      WHERE ml.is_active = true
-    `;
-    
-    const countParams: any[] = [];
-    
-    if (rarity) {
-      countQuery += ' AND ii.rarity = $1';
-      countParams.push(rarity);
-    }
-    
-    if (weapon) {
-      countQuery += rarity ? ' AND ii.weapon = $2' : ' AND ii.weapon = $1';
-      countParams.push(weapon);
-    }
+    const countQuery = query.replace(
+      'SELECT ml.*, ii.name, ii.rarity, ii.weapon, ii.image_url, ii.is_fragment, ii.fragments, ii.price as item_price, u.username as seller_username, u.telegram_id as seller_telegram_id',
+      'SELECT COUNT(*)'
+    ).split(' LIMIT ')[0];
 
-    const countResult = await pool.query(countQuery, countParams);
+    const countResult = await pool.query(countQuery, params.slice(0, -2));
     const total = parseInt(countResult.rows[0]?.count || '0');
+
+    // Статистика рынка
+    const statsResult = await pool.query(`
+      SELECT 
+        COUNT(*) as total_listings,
+        COALESCE(SUM(price), 0) as total_volume,
+        COALESCE(AVG(price), 0) as average_price,
+        COUNT(DISTINCT seller_id) as active_sellers
+      FROM market_listings 
+      WHERE is_active = true AND expires_at > NOW()
+    `);
 
     res.json({
       success: true,
-      listings,
+      listings: listingsResult.rows,
       pagination: {
         page: Number(page),
         limit: Number(limit),
         total,
         pages: Math.ceil(total / Number(limit))
-      }
+      },
+      stats: statsResult.rows[0]
     });
 
   } catch (error: unknown) {
     console.error('Get market listings error:', error);
-    res.status(500).json({ error: 'Ошибка получения лотов' });
+    res.status(500).json({ success: false, error: 'Ошибка получения лотов' });
   }
 });
 
-// Покупка лота (требует аутентификации)
-router.post('/buy', authenticate, async (req: Request<{}, {}, { listingId: number }>, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const { listingId } = req.body;
+// Создание лота
+router.post('/listings', authenticate, validateMarketListing, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { itemId, price, duration = 7 } = req.body;
 
-    if (!listingId) {
-      return res.status(400).json({ error: 'ID лота обязателен' });
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Проверяем предмет
+    const itemResult = await client.query(
+      `SELECT * FROM inventory_items 
+       WHERE id = $1 AND user_id = $2 AND is_tradable = true AND is_marketable = true`,
+      [itemId, userId]
+    );
+
+    if (itemResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Предмет не найден или не может быть продан' 
+      });
     }
 
-    // Получаем информацию о лоте
-    const listingResult = await pool.query<MarketListing & { 
-      seller_balance: number;
-      skin_id: number;
-      name: string;
-      rarity: string;
-      image_url: string | null;
-      is_fragment: boolean;
-      fragments: number;
-      price: number;
-      seller_id: number;
-    }>(
-      `SELECT 
-        ml.*,
-        ii.*,
-        u.balance as seller_balance
+    const item = itemResult.rows[0];
+
+    // 2. Проверяем цену
+    if (price < 10 || price > 1000000) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Цена должна быть от 10 до 1,000,000 CR' 
+      });
+    }
+
+    // 3. Проверяем, не выставлен ли уже предмет
+    const existingListing = await client.query(
+      'SELECT * FROM market_listings WHERE item_id = $1 AND is_active = true',
+      [itemId]
+    );
+
+    if (existingListing.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Предмет уже выставлен на рынок' 
+      });
+    }
+
+    // 4. Рассчитываем комиссию
+    const feePercentage = getFeePercentage(duration);
+    const fee = Math.floor(price * feePercentage / 100);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + duration);
+
+    // 5. Создаем лот
+    const listingResult = await client.query(
+      `INSERT INTO market_listings 
+       (seller_id, item_id, price, fee_percentage, expires_at) 
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING *`,
+      [userId, itemId, price, feePercentage, expiresAt]
+    );
+
+    const listing = listingResult.rows[0];
+
+    // 6. Обновляем предмет (помечаем как выставленный)
+    await client.query(
+      `UPDATE inventory_items SET is_marketable = false WHERE id = $1`,
+      [itemId]
+    );
+
+    // 7. Записываем транзакцию
+    await client.query(
+      `INSERT INTO transactions (user_id, type, amount, metadata) 
+       VALUES ($1, 'market_listing', $2, $3)`,
+      [
+        userId,
+        -fee,
+        JSON.stringify({
+          listingId: listing.id,
+          itemId,
+          price,
+          fee,
+          duration,
+          expiresAt: expiresAt.toISOString()
+        })
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      listing,
+      message: 'Предмет успешно выставлен на рынок'
+    });
+
+  } catch (error: unknown) {
+    await client.query('ROLLBACK');
+    console.error('Create listing error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка создания лота' });
+  } finally {
+    client.release();
+  }
+});
+
+// Покупка лота
+router.post('/buy', authenticate, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { listingId } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Получаем лот с блокировкой
+    const listingResult = await client.query(
+      `SELECT ml.*, ii.*, u.balance as seller_balance 
        FROM market_listings ml
        JOIN inventory_items ii ON ml.item_id = ii.id
        JOIN users u ON ml.seller_id = u.id
-       WHERE ml.id = $1 AND ml.is_active = true`,
+       WHERE ml.id = $1 AND ml.is_active = true 
+       AND ml.expires_at > NOW()
+       FOR UPDATE`,
       [listingId]
     );
 
     if (listingResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Лот не найден' });
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Лот не найден' });
     }
 
     const listing = listingResult.rows[0];
 
-    // Проверяем, не покупатель ли это сам у себя
+    // 2. Проверяем, не покупатель ли это сам у себя
     if (listing.seller_id === userId) {
-      return res.status(400).json({ error: 'Нельзя купить свой же лот' });
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: 'Нельзя купить свой же лот' });
     }
 
-    // Проверяем баланс покупателя
-    const buyerResult = await pool.query(
-      'SELECT balance FROM users WHERE id = $1',
+    // 3. Проверяем баланс покупателя
+    const buyerResult = await client.query(
+      'SELECT balance FROM users WHERE id = $1 FOR UPDATE',
       [userId]
     );
 
     if (buyerResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Покупатель не найден' });
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Покупатель не найден' });
     }
 
     const buyerBalance = buyerResult.rows[0].balance;
 
     if (buyerBalance < listing.price) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
+        success: false,
         error: 'Недостаточно средств',
         required: listing.price,
         current: buyerBalance
       });
     }
 
-    // Начинаем транзакцию
-    await pool.query('BEGIN');
+    // 4. Списываем средства у покупателя
+    await client.query(
+      'UPDATE users SET balance = balance - $1 WHERE id = $2',
+      [listing.price, userId]
+    );
 
-    try {
-      // Списываем средства у покупателя
-      await pool.query(
-        'UPDATE users SET balance = balance - $1 WHERE id = $2',
-        [listing.price, userId]
-      );
+    // 5. Зачисляем средства продавцу (минус комиссия)
+    const commission = Math.floor(listing.price * listing.fee_percentage / 100);
+    const sellerAmount = listing.price - commission;
+    
+    await client.query(
+      'UPDATE users SET balance = balance + $1 WHERE id = $2',
+      [sellerAmount, listing.seller_id]
+    );
 
-      // Зачисляем средства продавцу (минус комиссия 5%)
-      const commission = Math.round(listing.price * 0.05);
-      const sellerAmount = listing.price - commission;
-      
-      await pool.query(
-        'UPDATE users SET balance = balance + $1 WHERE id = $2',
-        [sellerAmount, listing.seller_id]
-      );
+    // 6. Передаем предмет покупателю
+    await client.query(
+      `UPDATE inventory_items 
+       SET user_id = $1, is_marketable = true 
+       WHERE id = $2`,
+      [userId, listing.item_id]
+    );
 
-      // Передаем предмет покупателю
-      await pool.query(
-        `UPDATE inventory_items 
-         SET user_id = $1 
-         WHERE id = $2`,
-        [userId, listing.item_id]
-      );
+    // 7. Помечаем лот как проданный
+    await client.query(
+      `UPDATE market_listings 
+       SET is_active = false, sold_at = NOW(), buyer_id = $1 
+       WHERE id = $2`,
+      [userId, listingId]
+    );
 
-      // Помечаем лот как проданный
-      await pool.query(
-        `UPDATE market_listings 
-         SET is_active = false, sold_at = CURRENT_TIMESTAMP 
-         WHERE id = $1`,
-        [listingId]
-      );
+    // 8. Записываем транзакции
+    await client.query(
+      `INSERT INTO transactions (user_id, type, amount, metadata) 
+       VALUES ($1, 'market_buy', $2, $3)`,
+      [
+        userId,
+        -listing.price,
+        JSON.stringify({
+          listingId,
+          itemId: listing.item_id,
+          itemName: listing.name,
+          sellerId: listing.seller_id,
+          price: listing.price,
+          commission
+        })
+      ]
+    );
 
-      // Записываем транзакции
-      await pool.query(
-        `INSERT INTO transactions (user_id, type, amount, metadata) 
-         VALUES ($1, 'market_buy', $2, $3)`,
-        [
-          userId,
-          -listing.price,
-          JSON.stringify({
-            listingId,
-            itemId: listing.item_id,
-            itemName: listing.name,
-            sellerId: listing.seller_id,
-            price: listing.price
-          })
-        ]
-      );
+    await client.query(
+      `INSERT INTO transactions (user_id, type, amount, metadata) 
+       VALUES ($1, 'market_sell', $2, $3)`,
+      [
+        listing.seller_id,
+        sellerAmount,
+        JSON.stringify({
+          listingId,
+          itemId: listing.item_id,
+          itemName: listing.name,
+          buyerId: userId,
+          price: listing.price,
+          commission
+        })
+      ]
+    );
 
-      await pool.query(
-        `INSERT INTO transactions (user_id, type, amount, metadata) 
-         VALUES ($1, 'market_sell', $2, $3)`,
-        [
-          listing.seller_id,
-          sellerAmount,
-          JSON.stringify({
-            listingId,
-            itemId: listing.item_id,
-            itemName: listing.name,
-            buyerId: userId,
-            price: listing.price,
-            commission
-          })
-        ]
-      );
+    await client.query('COMMIT');
 
-      await pool.query('COMMIT');
-
-      // Получаем обновленный баланс покупателя
-      const updatedBuyer = await pool.query(
-        'SELECT balance FROM users WHERE id = $1',
-        [userId]
-      );
-
-      res.json({
-        success: true,
-        item: {
-          id: listing.item_id,
-          name: listing.name,
-          rarity: listing.rarity,
-          imageUrl: listing.image_url
-        },
-        newBalance: updatedBuyer.rows[0].balance,
-        message: `Вы успешно купили ${listing.name} за ${listing.price} CR`
-      });
-
-    } catch (transactionError: unknown) {
-      await pool.query('ROLLBACK');
-      throw transactionError;
-    }
-
-  } catch (error: unknown) {
-    console.error('Buy item error:', error);
-    res.status(500).json({ error: 'Ошибка покупки предмета' });
-  }
-});
-
-// Получение истории покупок/продаж пользователя
-router.get('/history', authenticate, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const { type = 'all' } = req.query; // all, buy, sell
-
-    let query = `
-      SELECT 
-        t.*,
-        t.metadata->>'itemName' as item_name,
-        t.metadata->>'price' as price
-      FROM transactions t
-      WHERE t.user_id = $1 
-    `;
-
-    const params: any[] = [userId];
-
-    if (type === 'buy') {
-      query += " AND t.type = 'market_buy'";
-    } else if (type === 'sell') {
-      query += " AND t.type = 'market_sell'";
-    } else {
-      query += " AND t.type IN ('market_buy', 'market_sell')";
-    }
-
-    query += ' ORDER BY t.created_at DESC LIMIT 20';
-
-    const historyResult = await pool.query<Transaction>(query, params);
-    const history: Transaction[] = historyResult.rows;
+    // 9. Получаем обновленный баланс покупателя
+    const updatedBuyer = await client.query(
+      'SELECT balance FROM users WHERE id = $1',
+      [userId]
+    );
 
     res.json({
       success: true,
-      history
+      item: {
+        id: listing.item_id,
+        name: listing.name,
+        rarity: listing.rarity,
+        imageUrl: listing.image_url
+      },
+      newBalance: updatedBuyer.rows[0].balance,
+      message: `Вы успешно купили ${listing.name} за ${listing.price} CR`
     });
 
   } catch (error: unknown) {
-    console.error('Get market history error:', error);
-    res.status(500).json({ error: 'Ошибка получения истории' });
+    await client.query('ROLLBACK');
+    console.error('Buy item error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка покупки предмета' });
+  } finally {
+    client.release();
   }
 });
+
+// Вспомогательная функция для расчета комиссии
+function getFeePercentage(duration: number): number {
+  if (duration <= 1) return 5;
+  if (duration <= 3) return 4;
+  if (duration <= 7) return 3;
+  if (duration <= 14) return 2;
+  return 1;
+}
 
 export default router;

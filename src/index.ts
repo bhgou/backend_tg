@@ -13,7 +13,9 @@ import marketRoutes from './routes/market.routes';
 import channelRoutes from './routes/channels.routes';
 import realSkinRoutes from './routes/realSkins.routes';
 import { startBot } from './bot/bot';
-
+import adminRoutes from './routes/admin.routes';
+import paymentRoutes from './routes/payment.routes';
+import minigameRoutes from './routes/minigame.routes';
 // Импорт базы данных
 import { pool, testConnection, initDatabase, seedDatabase } from './db/database';
 
@@ -35,6 +37,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
 // API Routes
+app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/games', minigameRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/cases', caseRoutes);

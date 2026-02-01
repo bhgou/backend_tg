@@ -189,3 +189,77 @@ export interface ApiResponse<T = any> {
     pages: number;
   };
 }
+
+// Добавьте в конец файла:
+
+// Типы для премиум валюты
+export interface PremiumPayment {
+  id: number;
+  user_id: number;
+  amount_rub: number;
+  amount_premium: number;
+  payment_method: string;
+  payment_id: string;
+  status: string;
+  metadata: any;
+  created_at: string;
+  completed_at: string | null;
+}
+
+// Типы для мини-игр
+export interface Minigame {
+  id: number;
+  name: string;
+  type: string;
+  min_bet: number;
+  max_bet: number;
+  win_multiplier: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface GameSession {
+  id: number;
+  user_id: number;
+  minigame_id: number;
+  bet: number;
+  win_amount: number | null;
+  result: any;
+  created_at: string;
+}
+
+// Типы для спонсоров
+export interface Sponsor {
+  id: number;
+  name: string;
+  username: string | null;
+  invite_link: string;
+  reward_type: string;
+  reward_value: number;
+  premium_reward: number;
+  is_active: boolean;
+  priority: number;
+  created_at: string;
+}
+
+// Типы для настроек
+export interface AppSetting {
+  id: number;
+  key: string;
+  value: string;
+  type: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Типы для реферальных наград
+export interface ReferralReward {
+  id: number;
+  level: number;
+  reward_type: string;
+  reward_value: number;
+  is_active: boolean;
+  created_at: string;
+}
+
