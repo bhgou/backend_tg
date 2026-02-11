@@ -19,7 +19,7 @@ class TelegramService {
     try {
       this.bot = new Telegraf(config.telegram.botToken);
       this.webhookUrl = `${config.server.nodeEnv === 'production' 
-        ? process.env.APP_URL 
+        ? config.server.url
         : `http://localhost:${config.server.port}`}/api/bot/webhook`;
       
       this.setupBot();
