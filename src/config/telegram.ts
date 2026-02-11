@@ -201,7 +201,7 @@ class TelegramService {
         await this.bot.launch({
           webhook: {
             domain: this.webhookUrl,
-            port: parseInt(config.server.port, 10)
+            port: Number(config.server.port)
           }
         });
         console.log('🤖 Бот запущен в режиме webhook');
