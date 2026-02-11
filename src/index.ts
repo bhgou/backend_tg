@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { config, validateConfig } from './config/config';
+import telegramService from './config/telegram';
+import { pool, testConnection, initDatabase, seedDatabase } from './db/database';
 
 // Импорт маршрутов
 import authRoutes from './routes/auth.routes';
@@ -12,29 +14,32 @@ import inventoryRoutes from './routes/inventory.routes';
 import marketRoutes from './routes/market.routes';
 import channelRoutes from './routes/channels.routes';
 import realSkinRoutes from './routes/realSkins.routes';
-import { startBot } from './bot/bot';
 import adminRoutes from './routes/admin.routes';
 import paymentRoutes from './routes/payment.routes';
 import minigameRoutes from './routes/minigame.routes';
-// Импорт базы данных
-import { pool, testConnection, initDatabase, seedDatabase } from './db/database';
-
-dotenv.config();
+import webhookRoutes from './bot/webhook';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+
+// Валидация конфигурации
+try {
+  validateConfig();
+} catch (error: any) {
+  console.error('❌ Ошибка конфигурации:', error.message);
+  process.exit(1);
+}
 
 // Middleware
 app.use(helmet({
   contentSecurityPolicy: false,
 }));
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://*.vercel.app'],
+  origin: config.frontend.allowedOrigins,
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(morgan('dev'));
+app.use(morgan(config.server.nodeEnv === 'development' ? 'dev' : 'combined'));
 
 // API Routes
 app.use('/api/admin', adminRoutes);
@@ -48,41 +53,43 @@ app.use('/api/market', marketRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/real-skins', realSkinRoutes);
 
-// Статические файлы для изображений скинов
-app.use('/uploads', express.static('uploads'));
+// Webhook для Telegram
+app.use('/api/bot', webhookRoutes);
 
-// Инициализация БД
-app.get('/api/init-db', async (req, res) => {
-  try {
-    await initDatabase();
-    res.json({ success: true, message: 'База данных инициализирована' });
-  } catch (error: any) {
-    console.error('Init DB error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Ошибка инициализации БД',
-      details: error.message 
-    });
-  }
-});
+// Статические файлы
+app.use('/uploads', express.static(config.cdn.uploadPath));
 
-// Заполнение тестовыми данными
-app.get('/api/seed-db', async (req, res) => {
-  try {
-    await seedDatabase();
-    res.json({ success: true, message: 'Тестовые данные добавлены' });
-  } catch (error: any) {
-    console.error('Seed DB error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Ошибка заполнения БД',
-      details: error.message 
-    });
-  }
-});
+// Инициализация базы данных (только для разработки)
+if (config.server.nodeEnv === 'development') {
+  app.get('/api/dev/init-db', async (req, res) => {
+    try {
+      await initDatabase();
+      res.json({ success: true, message: 'База данных инициализирована' });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: 'Ошибка инициализации БД',
+        details: error.message 
+      });
+    }
+  });
+
+  app.get('/api/dev/seed-db', async (req, res) => {
+    try {
+      await seedDatabase();
+      res.json({ success: true, message: 'Тестовые данные добавлены' });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false,
+        error: 'Ошибка заполнения БД',
+        details: error.message 
+      });
+    }
+  });
+}
 
 // Проверка подключения к БД
-app.get('/api/db-check', async (req, res) => {
+app.get('/api/health/db', async (req, res) => {
   try {
     const isConnected = await testConnection();
     res.json({ 
@@ -100,129 +107,26 @@ app.get('/api/db-check', async (req, res) => {
   }
 });
 
-// ФИКС: Исправление структуры базы данных
-app.get('/api/fix-database', async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    console.log('🔄 Исправление структуры базы данных...');
-    
-    // 1. Проверяем и добавляем колонку drop_type если её нет
-    const checkColumnQuery = `
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'case_drops' AND column_name = 'drop_type'
-    `;
-    
-    const columnCheck = await client.query(checkColumnQuery);
-    
-    if (columnCheck.rows.length === 0) {
-      console.log('➕ Добавляем колонку drop_type в case_drops...');
-      await client.query(`
-        ALTER TABLE case_drops 
-        ADD COLUMN drop_type VARCHAR(50) DEFAULT 'regular'
-      `);
-    }
-    
-    // 2. Очищаем старые данные для перезаполнения
-    await client.query('DELETE FROM case_drops');
-    await client.query('DELETE FROM inventory_items');
-    await client.query('DELETE FROM transactions');
-    await client.query('DELETE FROM market_listings');
-    await client.query('DELETE FROM user_subscriptions');
-    await client.query('DELETE FROM withdrawal_requests');
-    await client.query('DELETE FROM real_skin_fragments');
-    
-    await client.query('COMMIT');
-    
-    console.log('✅ Структура базы данных исправлена');
-    
-    // Теперь можем заполнить данными
-    await seedDatabase();
-    
-    res.json({ 
-      success: true, 
-      message: 'База данных успешно исправлена и заполнена' 
-    });
-    
-  } catch (error: any) {
-    await client.query('ROLLBACK');
-    console.error('❌ Ошибка исправления БД:', error.message);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Ошибка исправления БД',
-      details: error.message 
-    });
-  } finally {
-    client.release();
-  }
-});
-
-// ФИКС: Полный сброс базы данных
-app.get('/api/reset-db', async (req, res) => {
-  try {
-    const client = await pool.connect();
-    
-    try {
-      await client.query('BEGIN');
-      
-      console.log('🗑️  Удаление всех таблиц...');
-      
-      // Удаляем все таблицы в правильном порядке (чтобы избежать зависимостей)
-      await client.query('DROP TABLE IF EXISTS case_drops CASCADE');
-      await client.query('DROP TABLE IF EXISTS market_listings CASCADE');
-      await client.query('DROP TABLE IF EXISTS inventory_items CASCADE');
-      await client.query('DROP TABLE IF EXISTS transactions CASCADE');
-      await client.query('DROP TABLE IF EXISTS user_subscriptions CASCADE');
-      await client.query('DROP TABLE IF EXISTS withdrawal_requests CASCADE');
-      await client.query('DROP TABLE IF EXISTS real_skin_fragments CASCADE');
-      await client.query('DROP TABLE IF EXISTS channels CASCADE');
-      await client.query('DROP TABLE IF EXISTS cases CASCADE');
-      await client.query('DROP TABLE IF EXISTS skins CASCADE');
-      await client.query('DROP TABLE IF EXISTS real_skins CASCADE');
-      await client.query('DROP TABLE IF EXISTS sponsors CASCADE');
-      await client.query('DROP TABLE IF EXISTS users CASCADE');
-      
-      await client.query('COMMIT');
-      console.log('✅ Все таблицы удалены');
-      
-      // Создаём заново
-      console.log('🔄 Создание таблиц...');
-      await initDatabase();
-      
-      console.log('🌱 Заполнение данными...');
-      await seedDatabase();
-      
-      res.json({ 
-        success: true, 
-        message: 'База данных полностью пересоздана' 
-      });
-      
-    } catch (error: any) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-    
-  } catch (error: any) {
-    console.error('Reset DB error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Ошибка сброса БД',
-      details: error.message 
-    });
-  }
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    success: true,
+    app: config.app.name,
+    version: config.app.version,
+    status: 'ok',
+    environment: config.server.nodeEnv,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Информация о API
 app.get('/api', (req, res) => {
   res.json({
     success: true,
-    name: 'CS:GO Skin Factory API',
-    version: '2.0.0',
+    name: config.app.name,
+    version: config.app.version,
+    description: config.app.description,
     endpoints: {
       auth: {
         login: 'POST /api/auth/login',
@@ -257,25 +161,8 @@ app.get('/api', (req, res) => {
       realSkins: {
         list: 'GET /api/real-skins',
         withdraw: 'POST /api/real-skins/withdraw'
-      },
-      database: {
-        check: 'GET /api/db-check',
-        init: 'GET /api/init-db',
-        seed: 'GET /api/seed-db',
-        fix: 'GET /api/fix-database',
-        reset: 'GET /api/reset-db'
       }
     }
-  });
-});
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ 
-    success: true,
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
   });
 });
 
@@ -294,7 +181,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ 
     success: false,
     error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    message: config.server.nodeEnv === 'development' ? err.message : undefined
   });
 });
 
@@ -303,32 +190,41 @@ const startServer = async () => {
   try {
     console.log('🚀 Запуск сервера...');
     
-    // Запуск бота
-    startBot();
-    
     // Проверяем подключение к БД
-    setTimeout(async () => {
-      try {
-        const isConnected = await testConnection();
-        if (isConnected) {
-          console.log('✅ Подключение к БД успешно');
-        } else {
-          console.log('⚠️  Проблемы с подключением к БД');
+    const isConnected = await testConnection();
+    if (!isConnected) {
+      console.error('❌ Не удалось подключиться к базе данных');
+      if (config.server.nodeEnv === 'development') {
+        console.log('🔄 Попытка инициализации БД...');
+        try {
+          await initDatabase();
+          await seedDatabase();
+          console.log('✅ База данных создана и заполнена');
+        } catch (error) {
+          console.error('❌ Ошибка инициализации БД:', error);
         }
-      } catch (error) {
-        console.log('⚠️  Ошибка подключения к БД:', error);
       }
-    }, 1000);
+    } else {
+      console.log('✅ Подключение к БД успешно');
+    }
 
-    app.listen(PORT, () => {
-      console.log(`✅ Сервер запущен на http://localhost:${PORT}`);
-      console.log(`📊 API доступен на http://localhost:${PORT}/api`);
-      console.log(`❤️  Health check: http://localhost:${PORT}/health`);
-      console.log(`🔌 Проверка БД: http://localhost:${PORT}/api/db-check`);
-      console.log(`📁 Для инициализации БД: http://localhost:${PORT}/api/init-db`);
-      console.log(`🔧 Для исправления БД: http://localhost:${PORT}/api/fix-database`);
-      console.log(`🗑️  Для полного сброса БД: http://localhost:${PORT}/api/reset-db`);
-      console.log(`🌱 Для заполнения данными: http://localhost:${PORT}/api/seed-db`);
+    // Запускаем Telegram бота
+    await telegramService.launchBot();
+
+    app.listen(config.server.port, () => {
+      console.log('='.repeat(50));
+      console.log(`✅ Сервер запущен на порту ${config.server.port}`);
+      console.log(`📊 Режим: ${config.server.nodeEnv}`);
+      console.log(`🌐 API: http://localhost:${config.server.port}/api`);
+      console.log(`❤️  Health: http://localhost:${config.server.port}/api/health`);
+      console.log(`🗄️  Проверка БД: http://localhost:${config.server.port}/api/health/db`);
+      console.log('='.repeat(50));
+      
+      if (config.server.nodeEnv === 'development') {
+        console.log('🛠️  Инструменты разработчика:');
+        console.log(`   📁 Инициализация БД: http://localhost:${config.server.port}/api/dev/init-db`);
+        console.log(`   🌱 Заполнение данными: http://localhost:${config.server.port}/api/dev/seed-db`);
+      }
     });
   } catch (error: any) {
     console.error('❌ Ошибка запуска сервера:', error.message);
@@ -338,13 +234,15 @@ const startServer = async () => {
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received. Closing database connection...');
+  console.log('SIGTERM received. Shutting down gracefully...');
+  await telegramService.stopBot();
   await pool.end();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received. Closing database connection...');
+  console.log('SIGINT received. Shutting down gracefully...');
+  await telegramService.stopBot();
   await pool.end();
   process.exit(0);
 });
