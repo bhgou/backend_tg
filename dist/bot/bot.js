@@ -249,7 +249,7 @@ bot.command('stats', async (ctx) => {
 bot.catch((err, ctx) => {
     console.error(`Ошибка для ${ctx.updateType}:`, err);
 });
-// Запуск бота
+// Запуск бота (для разработки)
 const startBot = () => {
     bot.launch()
         .then(() => {
@@ -262,7 +262,4 @@ const startBot = () => {
     });
 };
 exports.startBot = startBot;
-// Graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
 exports.default = bot;

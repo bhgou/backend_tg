@@ -294,7 +294,7 @@ bot.catch((err: any, ctx: Context) => {
   console.error(`Ошибка для ${ctx.updateType}:`, err);
 });
 
-// Запуск бота
+// Запуск бота (для разработки)
 export const startBot = () => {
   bot.launch()
     .then(() => {
@@ -306,9 +306,5 @@ export const startBot = () => {
       console.error('❌ Ошибка запуска бота:', error);
     });
 };
-
-// Graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
 export default bot;

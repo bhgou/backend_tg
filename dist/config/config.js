@@ -18,6 +18,7 @@ exports.config = {
         port: process.env.PORT || 3001,
         nodeEnv: process.env.NODE_ENV || 'development',
         apiVersion: process.env.API_VERSION || 'v1',
+        url: process.env.BACKEND_URL || process.env.APP_URL || 'http://localhost:3001',
     },
     // JWT токен
     jwt: {

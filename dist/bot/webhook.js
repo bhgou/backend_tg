@@ -7,10 +7,10 @@ const express_1 = __importDefault(require("express"));
 const bot_1 = __importDefault(require("./bot"));
 const router = express_1.default.Router();
 // Вебхук для Telegram
-router.post(`/webhook/${process.env.BOT_TOKEN}`, (req, res) => {
+router.post('/webhook', (req, res) => {
     bot_1.default.handleUpdate(req.body, res);
 });
-router.get(`/webhook/${process.env.BOT_TOKEN}`, (req, res) => {
+router.get('/webhook', (req, res) => {
     res.send('Webhook is working');
 });
 exports.default = router;
