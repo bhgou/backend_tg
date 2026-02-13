@@ -1,27 +1,40 @@
 services:
   - type: web
-    name: csgo-skin-factory-api
+    name: ar-fintes2
     env: node
-    region: frankfurt  # или oregon, singapore
-    buildCommand: |
-      npm install
-      npm run build
-      npx prisma generate
+    region: frankfurt
+    buildCommand: npm install && npm run build
     startCommand: npm start
-    healthCheckPath: /health
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
       - key: DATABASE_URL
         fromDatabase:
-          name: csgo-skin-factory-db
+          name: skin-factory-db
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: BACKEND_URL
+        value: https://ar-fintes2.onrender.com
+      - key: FRONTEND_URL
+        value: https://tg-frontend-7ltg.vercel.app
+      - key: ALLOWED_ORIGINS
+        value: https://tg-frontend-7ltg.vercel.app,https://*.vercel.app
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        value: SkinFactoryArBot
+      - key: TELEGRAM_WEB_APP_URL
+        value: https://tg-frontend-7ltg.vercel.app
+      - key: ADMIN_IDS
+        value: 777777777,123456789
 
 databases:
-  - name: csgo-skin-factory-db
+  - name: skin-factory-db
     plan: free
-    databaseName: csgoskinfactory
+    databaseName: skin_factory
     region: frankfurt

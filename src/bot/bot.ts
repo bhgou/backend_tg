@@ -1,22 +1,16 @@
 import { Telegraf, Context } from 'telegraf';
-import dotenv from 'dotenv';
+import { config } from '../config/config';
 import { pool } from '../db/database';
 
-dotenv.config();
-
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const FRONTEND_URL = process.env.FRONTEND_URL;
-const BOT_USERNAME = process.env.BOT_USERNAME;
+const BOT_TOKEN = config.telegram.botToken;
+const FRONTEND_URL = config.telegram.webAppUrl;
+const BOT_USERNAME = config.telegram.botUsername;
 
 if (!BOT_TOKEN) {
-  throw new Error('TELEGRAM_BOT_TOKEN не установлен в .env');
+  console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен. Бот не будет работать.');
 }
 
-if (!FRONTEND_URL) {
-  throw new Error('FRONTEND_URL не установлен в .env');
-}
-
-const bot = new Telegraf(BOT_TOKEN);
+const bot = new Telegraf(BOT_TOKEN || '');
 
 // Вспомогательная функция для безопасного парсинга
 const parseWebAppData = (data: any) => {
@@ -57,6 +51,7 @@ bot.start(async (ctx) => {
     
     message += 'Нажмите кнопку ниже, чтобы начать:';
     
+    const botUsername = bot.botInfo?.username || BOT_USERNAME;
     await ctx.reply(message, {
       parse_mode: 'Markdown',
       reply_markup: {
@@ -67,7 +62,7 @@ bot.start(async (ctx) => {
           }],
           [{
             text: '📱 Открыть на телефоне',
-            url: `https://t.me/${BOT_USERNAME || bot.botInfo?.username}/skin_factory${startParam ? `?startapp=${startParam}` : ''}`
+            url: `https://t.me/${botUsername}/skin_factory${startParam ? `?startapp=${startParam}` : ''}`
           }],
           [{
             text: '📢 Проверить подписки',
@@ -254,7 +249,7 @@ bot.on('web_app_data', async (ctx) => {
 bot.command('stats', async (ctx) => {
   try {
     // Проверяем, является ли пользователь администратором
-    const adminIds = process.env.ADMIN_IDS?.split(',').map(id => id.trim()) || [];
+    const adminIds = config.admin.ids;
     
     if (!ctx.from || !adminIds.includes(ctx.from.id.toString())) {
       await ctx.reply('У вас нет доступа к этой команде');
@@ -293,18 +288,5 @@ bot.command('stats', async (ctx) => {
 bot.catch((err: any, ctx: Context) => {
   console.error(`Ошибка для ${ctx.updateType}:`, err);
 });
-
-// Запуск бота (для разработки)
-export const startBot = () => {
-  bot.launch()
-    .then(() => {
-      console.log('🤖 Telegram бот запущен');
-      console.log('🔗 Ссылка на бота:', `https://t.me/${bot.botInfo?.username}`);
-      console.log('🌐 FRONTEND_URL:', FRONTEND_URL);
-    })
-    .catch((error) => {
-      console.error('❌ Ошибка запуска бота:', error);
-    });
-};
 
 export default bot;

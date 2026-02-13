@@ -1,23 +1,15 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startBot = void 0;
 const telegraf_1 = require("telegraf");
-const dotenv_1 = __importDefault(require("dotenv"));
+const config_1 = require("../config/config");
 const database_1 = require("../db/database");
-dotenv_1.default.config();
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const FRONTEND_URL = process.env.FRONTEND_URL;
-const BOT_USERNAME = process.env.BOT_USERNAME;
+const BOT_TOKEN = config_1.config.telegram.botToken;
+const FRONTEND_URL = config_1.config.telegram.webAppUrl;
+const BOT_USERNAME = config_1.config.telegram.botUsername;
 if (!BOT_TOKEN) {
-    throw new Error('TELEGRAM_BOT_TOKEN не установлен в .env');
+    console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен. Бот не будет работать.');
 }
-if (!FRONTEND_URL) {
-    throw new Error('FRONTEND_URL не установлен в .env');
-}
-const bot = new telegraf_1.Telegraf(BOT_TOKEN);
+const bot = new telegraf_1.Telegraf(BOT_TOKEN || '');
 // Вспомогательная функция для безопасного парсинга
 const parseWebAppData = (data) => {
     try {
@@ -54,6 +46,7 @@ bot.start(async (ctx) => {
             message += 'При регистрации с этим кодом вы оба получите бонус!\n\n';
         }
         message += 'Нажмите кнопку ниже, чтобы начать:';
+        const botUsername = bot.botInfo?.username || BOT_USERNAME;
         await ctx.reply(message, {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -64,7 +57,7 @@ bot.start(async (ctx) => {
                         }],
                     [{
                             text: '📱 Открыть на телефоне',
-                            url: `https://t.me/${BOT_USERNAME || bot.botInfo?.username}/skin_factory${startParam ? `?startapp=${startParam}` : ''}`
+                            url: `https://t.me/${botUsername}/skin_factory${startParam ? `?startapp=${startParam}` : ''}`
                         }],
                     [{
                             text: '📢 Проверить подписки',
@@ -216,7 +209,7 @@ bot.on('web_app_data', async (ctx) => {
 bot.command('stats', async (ctx) => {
     try {
         // Проверяем, является ли пользователь администратором
-        const adminIds = process.env.ADMIN_IDS?.split(',').map(id => id.trim()) || [];
+        const adminIds = config_1.config.admin.ids;
         if (!ctx.from || !adminIds.includes(ctx.from.id.toString())) {
             await ctx.reply('У вас нет доступа к этой команде');
             return;
@@ -249,17 +242,4 @@ bot.command('stats', async (ctx) => {
 bot.catch((err, ctx) => {
     console.error(`Ошибка для ${ctx.updateType}:`, err);
 });
-// Запуск бота (для разработки)
-const startBot = () => {
-    bot.launch()
-        .then(() => {
-        console.log('🤖 Telegram бот запущен');
-        console.log('🔗 Ссылка на бота:', `https://t.me/${bot.botInfo?.username}`);
-        console.log('🌐 FRONTEND_URL:', FRONTEND_URL);
-    })
-        .catch((error) => {
-        console.error('❌ Ошибка запуска бота:', error);
-    });
-};
-exports.startBot = startBot;
 exports.default = bot;
