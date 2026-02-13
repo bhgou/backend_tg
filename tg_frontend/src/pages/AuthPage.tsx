@@ -62,18 +62,18 @@ const AuthPage: React.FC = () => {
       // Отправляем запрос на бэкенд
       const response = await authAPI.login(loginData);
       
-      console.log('✅ Авторизация успешна:', response);
+      console.log('✅ Авторизация успешна:', response.data);
 
       // Сохраняем токен и данные пользователя
-      if (response.token) {
-        localStorage.setItem('token', response.token);
-        useUserStore.getState().setToken(response.token);
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        useUserStore.getState().setToken(response.data.token);
       }
 
       // Инициализируем пользователя
       await initUser({
-        ...response.user,
-        token: response.token,
+        ...response.data.user,
+        token: response.data.token,
       });
 
       // Перенаправляем на главную

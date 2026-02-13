@@ -75,16 +75,16 @@ function App() {
 
               const response = await authAPI.login(loginData);
               
-              console.log('✅ Авторизация через Telegram успешна:', response);
+              console.log('✅ Авторизация через Telegram успешна:', response.data);
 
-              if (response.token) {
-                localStorage.setItem('token', response.token);
-                useUserStore.getState().setToken(response.token);
+              if (response.data.token) {
+                localStorage.setItem('token', response.data.token);
+                useUserStore.getState().setToken(response.data.token);
               }
 
               await initUser({
-                ...response.user,
-                token: response.token,
+                ...response.data.user,
+                token: response.data.token,
               });
               
               return;

@@ -126,8 +126,8 @@ export const useUserStore = create<UserStoreState>()(
 
           const response = await authAPI.verify(token);
           
-          if (response.success && response.user) {
-            await get().initUser(response.user);
+          if (response.data.success && response.data.user) {
+            await get().initUser(response.data.user);
             return true;
           }
           
@@ -143,8 +143,8 @@ export const useUserStore = create<UserStoreState>()(
         try {
           const response = await userAPI.getProfile();
           
-          if (response.success && response.data) {
-            get().updateUserData(response.data);
+          if (response.data.success && response.data.data) {
+            get().updateUserData(response.data.data);
           }
         } catch (error) {
           console.error('❌ Ошибка загрузки данных пользователя:', error);
