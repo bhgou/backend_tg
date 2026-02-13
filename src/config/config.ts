@@ -6,30 +6,30 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 export const config = {
   // База данных
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/skin_factory',
+    url: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production',
   },
 
   // Сервер
   server: {
     port: process.env.PORT || 3001,
-    nodeEnv: process.env.NODE_ENV || 'development',
+    nodeEnv: process.env.NODE_ENV ,
     apiVersion: process.env.API_VERSION || 'v1',
     url: process.env.BACKEND_URL || process.env.APP_URL || 'http://localhost:3001',
   },
 
   // JWT токен
   jwt: {
-    secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
+    secret: process.env.JWT_SECRET,
+    expiresIn: process.env.JWT_EXPIRES_IN ,
   },
 
   // Telegram Bot
   telegram: {
-    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-    botUsername: process.env.TELEGRAM_BOT_USERNAME || 'skin_factory_bot',
-    webAppUrl: process.env.TELEGRAM_WEB_APP_URL || 'https://your-frontend.vercel.app',
-    loginWidget: process.env.TELEGRAM_LOGIN_WIDGET || 'https://oauth.telegram.org',
+    botToken: process.env.TELEGRAM_BOT_TOKEN,
+    botUsername: process.env.TELEGRAM_BOT_USERNAME,
+    webAppUrl: process.env.TELEGRAM_WEB_APP_URL,
+    loginWidget: process.env.TELEGRAM_LOGIN_WIDGET,
   },
 
   // Администраторы
@@ -67,7 +67,7 @@ export const config = {
     allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://tg-frontend-7ltg.vercel.app',
+      'https://backend-tg-4k2p.vercel.app/',
       'https://*.vercel.app',
       'https://skinfactory.com',
     ],
