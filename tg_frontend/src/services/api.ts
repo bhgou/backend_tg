@@ -145,59 +145,58 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  login: (data: any) => api.post('/auth/login', data),
-  verify: (token: string) => api.post('/auth/verify', { token }),
-  logout: () => api.post('/auth/logout'),
+  login: (data: any): Promise<ApiResponse> => api.post('/auth/login', data),
+  verify: (token: string): Promise<ApiResponse> => api.post('/auth/verify', { token }),
+  logout: (): Promise<ApiResponse> => api.post('/auth/logout'),
 };
 
 // User API
 export const userAPI = {
-  getProfile: () => api.get('/user/profile'),
-  getStats: () => api.get('/user/stats'),
-  claimDaily: () => api.post('/user/daily'),
-  getReferrals: () => api.get('/user/referrals'),
-  getTransactions: (params?: any) => api.get('/user/transactions', { params }),
-  updateProfile: (data: any) => api.put('/user/profile', data),
+  getProfile: (): Promise<ApiResponse> => api.get('/user/profile'),
+  getStats: (): Promise<UserStatsResponse> => api.get('/user/stats'),
+  claimDaily: (): Promise<ApiResponse> => api.post('/user/daily'),
+  getReferrals: (): Promise<ApiResponse> => api.get('/user/referrals'),
+  getTransactions: (params?: any): Promise<ApiResponse> => api.get('/user/transactions', { params }),
+  updateProfile: (data: any): Promise<ApiResponse> => api.put('/user/profile', data),
 };
 
 // Case API
 export const caseAPI = {
-  getCases: () => api.get('/cases'),
-  getCase: (id: number) => api.get(`/cases/${id}`),
-  getCaseDrops: (caseId: number) => api.get(`/cases/${caseId}/drops`),
-  openCase: (caseId: number) => api.post('/cases/open', { caseId }),
-  getCaseHistory: (params?: any) => api.get('/cases/history', { params }),
+  getCases: (): Promise<CasesResponse> => api.get('/cases'),
+  getCase: (id: number): Promise<ApiResponse> => api.get(`/cases/${id}`),
+  getCaseDrops: (caseId: number): Promise<ApiResponse> => api.get(`/cases/${caseId}/drops`),
+  openCase: (caseId: number): Promise<OpenCaseResponse> => api.post('/cases/open', { caseId }),  getCaseHistory: (params?: any): Promise<ApiResponse> => api.get('/cases/history', { params }),
 };
 
 // Inventory API
 export const inventoryAPI = {
-  getInventory: (params?: any) => api.get('/inventory', { params }),
-  combineSkin: (skinId: number) => api.post('/inventory/combine', { skinId }),
-  sellItem: (data: any) => api.post('/inventory/sell', data),
-  cancelSale: (listingId: number) => api.post('/inventory/cancel-sale', { listingId }),
+  getInventory: (params?: any): Promise<InventoryResponse> => api.get('/inventory', { params }),
+  combineSkin: (skinId: number): Promise<ApiResponse> => api.post('/inventory/combine', { skinId }),
+  sellItem: (data: any): Promise<ApiResponse> => api.post('/inventory/sell', data),
+  cancelSale: (listingId: number): Promise<ApiResponse> => api.post('/inventory/cancel-sale', { listingId }),
 };
 
 // Market API
 export const marketAPI = {
-  getListings: (params?: any) => api.get('/market', { params }),
-  createListing: (data: any) => api.post('/market/listings', data),
-  buyItem: (listingId: number) => api.post('/market/buy', { listingId }),
-  searchItems: (params: any) => api.get('/market/search', { params }),
+  getListings: (params?: any): Promise<MarketResponse> => api.get('/market', { params }),
+  createListing: (data: any): Promise<ApiResponse> => api.post('/market/listings', data),
+  buyItem: (listingId: number): Promise<ApiResponse> => api.post('/market/buy', { listingId }),
+  searchItems: (params: any): Promise<ApiResponse> => api.get('/market/search', { params }),
 };
 
 // Game API
 export const gameAPI = {
-  getGames: () => api.get('/games'),
-  playGame: (gameType: string, data: any) => api.post(`/games/${gameType}/play`, data),
-  getGameHistory: (params?: any) => api.get('/games/history', { params }),
+  getGames: (): Promise<ApiResponse> => api.get('/games'),
+  playGame: (gameType: string, data: any): Promise<ApiResponse> => api.post(`/games/${gameType}/play`, data),
+  getGameHistory: (params?: any): Promise<ApiResponse> => api.get('/games/history', { params }),
 };
 
 // Payment API
 export const paymentAPI = {
-  getPackages: () => api.get('/payments/packages'),
-  createPayment: (data: any) => api.post('/payments/create', data),
-  getPaymentStatus: (paymentId: string) => api.get(`/payments/status/${paymentId}`),
-  getPaymentHistory: (params?: any) => api.get('/payments/history', { params }),
+  getPackages: (): Promise<ApiResponse> => api.get('/payments/packages'),
+  createPayment: (data: any): Promise<PaymentCreateResponse> => api.post('/payments/create', data),
+  getPaymentStatus: (paymentId: string): Promise<ApiResponse> => api.get(`/payments/status/${paymentId}`),
+  getPaymentHistory: (params?: any): Promise<ApiResponse> => api.get('/payments/history', { params }),
 };
 
 // Channels API

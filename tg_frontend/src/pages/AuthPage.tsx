@@ -21,13 +21,18 @@ const AuthPage: React.FC = () => {
     const tgInitialized = telegramService.isTelegram();
     setIsTelegram(tgInitialized);
 
+    console.log('📱 AuthPage: Telegram initialized:', tgInitialized);
+
     // Если уже авторизованы, перенаправляем на главную
     if (user && user.id) {
+      console.log('✅ User already authenticated, redirecting to home');
       navigate('/');
+      return;
     }
 
     // Если в Telegram, автоматически пытаемся авторизоваться
     if (tgInitialized) {
+      console.log('🔐 Auto-login through Telegram...');
       autoLoginTelegram();
     }
   }, [user, navigate]);
@@ -42,11 +47,17 @@ const AuthPage: React.FC = () => {
       // Получаем данные пользователя из Telegram WebApp
       const authData = await telegramService.getAuthData();
       
+      console.log('👤 Telegram WebApp данные:', {
+        hasUser: !!authData.user,
+        userId: authData.user?.id,
+        username: authData.user?.username,
+        hasInitData: !!authData.initData,
+        startParam: authData.startParam,
+      });
+      
       if (!authData.user) {
         throw new Error('Не удалось получить данные пользователя из Telegram');
       }
-
-      console.log('👤 Telegram данные:', authData);
 
       // Формируем данные для отправки на бэкенд
       const loginData = {
@@ -59,29 +70,49 @@ const AuthPage: React.FC = () => {
         initData: authData.initData,
       };
 
+      console.log('📤 Отправка запроса на бэкенд:', {
+        telegramId: loginData.telegramId,
+        username: loginData.username,
+      });
+
       // Отправляем запрос на бэкенд
       const response = await authAPI.login(loginData);
       
-      console.log('✅ Авторизация успешна:', response.data);
+      console.log('📥 Ответ от бэкенда:', response);
+
+      // Проверяем структуру ответа
+      if (!response.success) {
+        throw new Error(response.error || 'Ошибка авторизации');
+      }
 
       // Сохраняем токен и данные пользователя
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-        useUserStore.getState().setToken(response.data.token);
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        useUserStore.getState().setToken(response.token);
+        console.log('✅ Токен сохранен');
       }
 
       // Инициализируем пользователя
       await initUser({
-        ...response.data.user,
-        token: response.data.token,
+        ...response.user,
+        token: response.token,
       });
+
+      console.log('✅ Пользователь инициализирован:', response.user);
 
       // Перенаправляем на главную
       navigate('/');
 
     } catch (err: any) {
       console.error('❌ Ошибка авторизации:', err);
-      setError(err.message || 'Ошибка авторизации через Telegram');
+      console.error('📦 Error details:', {
+        message: err.message,
+        response: err.response,
+        stack: err.stack,
+      });
+      
+      const errorMessage = err.error || err.response?.data?.error || err.message || 'Ошибка авторизации через Telegram';
+      setError(errorMessage);
       setLoading(false);
     }
   };
@@ -98,8 +129,11 @@ const AuthPage: React.FC = () => {
         return;
       }
 
+      console.log('🔐 Ручной вход:', { telegramId });
+
       // Создаем тестового пользователя
       const testUser = {
+        id: Date.now(),
         telegramId: telegramId.trim(),
         username: 'test_user_' + telegramId.trim(),
         firstName: 'Тестовый',
@@ -112,15 +146,18 @@ const AuthPage: React.FC = () => {
       };
 
       await initUser(testUser);
+      console.log('✅ Тестовый пользователь создан');
       navigate('/');
 
     } catch (err: any) {
+      console.error('❌ Ошибка ручного входа:', err);
       setError(err.message || 'Ошибка авторизации');
       setLoading(false);
     }
   };
 
   const handleRetry = () => {
+    console.log('🔄 Повторная попытка авторизации');
     setError('');
     if (isTelegram) {
       autoLoginTelegram();

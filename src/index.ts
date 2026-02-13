@@ -107,9 +107,19 @@ app.get('/api/health/db', async (req, res) => {
   }
 });
 
+// Health check для Render (root route)
+app.get('/', (req, res) => {
+  res.json({ 
+    success: true,
+    status: 'ok',
+    app: config.app.name,
+    version: config.app.version
+  });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ 
+  res.json({
     success: true,
     app: config.app.name,
     version: config.app.version,

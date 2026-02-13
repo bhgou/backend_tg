@@ -9,10 +9,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // Регистрация/логин через Telegram
 router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) => {
   try {
-    const { telegramId, username, firstName, lastName, photoUrl, referralCode } = req.body;
+    console.log('🔐 Login request received:', {
+      telegramId: req.body.telegramId,
+      username: req.body.username,
+      hasInitData: !!req.body.initData,
+    });
+
+    const { telegramId, username, firstName, lastName, photoUrl, referralCode, initData } = req.body;
 
     if (!telegramId) {
-      return res.status(400).json({ error: 'Telegram ID обязателен' });
+      console.error('❌ Login failed: telegramId is required');
+      return res.status(400).json({ success: false, error: 'Telegram ID обязателен' });
     }
 
     // Проверяем, есть ли пользователь
@@ -26,14 +33,19 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
     if (existingUser.rows.length > 0) {
       // Обновляем существующего пользователя
       user = existingUser.rows[0];
+      
       await pool.query(
         `UPDATE users 
          SET username = $1, first_name = $2, last_name = $3, avatar_url = $4, updated_at = CURRENT_TIMESTAMP
          WHERE telegram_id = $5`,
         [username, firstName, lastName, photoUrl, telegramId]
       );
+      
+      console.log('✅ User updated:', { id: user.id, username });
     } else {
       // Создаем нового пользователя
+      console.log('🆕 Creating new user:', { telegramId, username });
+      
       let referredBy: number | null = null;
       
       // Проверяем реферальный код
@@ -45,6 +57,7 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
         
         if (referrer.rows.length > 0) {
           referredBy = referrer.rows[0].id;
+          console.log('✅ Referral found:', { referrerId: referredBy });
           
           // Начисляем бонус рефереру
           await pool.query(
@@ -82,6 +95,8 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
          VALUES ($1, 'welcome_bonus', 500, $2)`,
         [user.id, JSON.stringify({ source: 'registration' })]
       );
+      
+      console.log('✅ New user created:', { id: user.id, username, balance: user.balance });
     }
 
     // Создаем JWT токен
@@ -94,7 +109,7 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
       { expiresIn: '30d' }
     );
 
-    res.json({
+    const responseData = {
       success: true,
       token,
       user: {
@@ -105,16 +120,24 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
         lastName: user.last_name,
         avatarUrl: user.avatar_url,
         balance: user.balance,
+        premiumBalance: user.premium_balance || 0,
         totalEarned: user.total_earned,
         dailyStreak: user.daily_streak,
         referralCode: user.referral_code,
+        isAdmin: user.is_admin,
         createdAt: user.created_at
       }
-    });
+    };
 
-  } catch (error: unknown) {
-    console.error('Auth error:', error);
-    res.status(500).json({ error: 'Ошибка аутентификации' });
+    console.log('✅ Login successful:', { userId: user.id, username });
+    res.json(responseData);
+
+  } catch (error: any) {
+    console.error('❌ Auth error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message || 'Ошибка аутентификации' 
+    });
   }
 });
 
@@ -124,7 +147,8 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
     const { token } = req.body;
 
     if (!token) {
-      return res.status(400).json({ error: 'Токен обязателен' });
+      console.error('❌ Verify failed: token is required');
+      return res.status(400).json({ success: false, error: 'Токен обязателен' });
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; telegramId: string };
@@ -135,12 +159,13 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
     );
 
     if (userResult.rows.length === 0) {
-      return res.status(401).json({ error: 'Пользователь не найден' });
+      console.error('❌ Verify failed: user not found:', { userId: decoded.userId });
+      return res.status(401).json({ success: false, error: 'Пользователь не найден' });
     }
 
     const user: User = userResult.rows[0];
 
-    res.json({
+    const responseData = {
       success: true,
       user: {
         id: user.id,
@@ -150,16 +175,24 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
         lastName: user.last_name,
         avatarUrl: user.avatar_url,
         balance: user.balance,
+        premiumBalance: user.premium_balance || 0,
         totalEarned: user.total_earned,
         dailyStreak: user.daily_streak,
         referralCode: user.referral_code,
+        isAdmin: user.is_admin,
         createdAt: user.created_at
       }
-    });
+    };
 
-  } catch (error: unknown) {
-    console.error('Verify error:', error);
-    res.status(401).json({ error: 'Неверный токен' });
+    console.log('✅ Verify successful:', { userId: user.id, username });
+    res.json(responseData);
+
+  } catch (error: any) {
+    console.error('❌ Verify error:', error);
+    res.status(401).json({ 
+      success: false,
+      error: error.message || 'Неверный токен' 
+    });
   }
 });
 
