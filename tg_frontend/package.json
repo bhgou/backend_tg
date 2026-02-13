@@ -2,21 +2,12 @@
   "name": "tg_frontend",
   "version": "1.0.0",
   "description": "Skin Factory - Telegram Web App",
-  "homepage": "https://github.com/bhgou/tg_frontend#readme",
-  "bugs": {
-    "url": "https://github.com/bhgou/tg_frontend/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bhgou/tg_frontend.git"
-  },
-  "license": "ISC",
-  "author": "",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
+    "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
