@@ -68,8 +68,12 @@ export const config = {
     allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://backend-tg-4k2p.vercel.app/',
+      'https://backend-tg-4k2p.vercel.app',
+      'https://tg-frontend-7ltg.vercel.app',
       'https://*.vercel.app',
+      'https://t.me',
+      'https://weba.telegram.org',
+      'https://*.telegram.org',
       'https://skinfactory.com',
     ],
   },
