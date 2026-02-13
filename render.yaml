@@ -19,17 +19,18 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: BACKEND_URL
-        value: https://ar-fintes2.onrender.com
+        # Используем RENDER_EXTERNAL_URL для автоматического определения URL
+        value: https://backend-tg-i7mg.onrender.com
       - key: FRONTEND_URL
-        value: https://tg-frontend-7ltg.vercel.app
+        value: https://backend-tg-4k2p.vercel.app
       - key: ALLOWED_ORIGINS
-        value: https://tg-frontend-7ltg.vercel.app,https://*.vercel.app
+        value: https://backend-tg-4k2p.vercel.app,https://*.vercel.app
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_BOT_USERNAME
         value: SkinFactoryArBot
       - key: TELEGRAM_WEB_APP_URL
-        value: https://tg-frontend-7ltg.vercel.app
+        value: https://backend-tg-4k2p.vercel.app
       - key: ADMIN_IDS
         value: 777777777,123456789
 
