@@ -1,13 +1,10 @@
 import React from 'react';
 import { 
-  BarChart3, Users, DollarSign, Package, 
-  Settings, Download, TrendingUp, Award,
-  Gift, Gamepad2
+  Users, DollarSign, Package, 
+  Settings, Gamepad2
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { useUserStore } from '../store/user.store';
 
 const AdminPage: React.FC = () => {
   return (

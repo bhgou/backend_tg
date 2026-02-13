@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Tag, Percent, AlertCircle, TrendingUp, Clock } from 'lucide-react';
+import { ArrowLeft, Tag, AlertCircle, TrendingUp } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { useUserStore } from '../store/user.store';
