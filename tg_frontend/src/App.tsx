@@ -27,7 +27,7 @@ import { LoadingScreen } from './components/layout/LoadingScreen';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 
 function App() {
-  const { isAuthenticated, isLoading, initUser } = useUserStore();
+  const { isAuthenticated, isLoading, initUser, verifyToken, token } = useUserStore();
   const location = useLocation();
 
   useEffect(() => {
@@ -41,24 +41,72 @@ function App() {
           throw new Error('Не удалось подключиться к серверу');
         }
         
-        // 2. Инициализируем Telegram или аутентификацию
-        const userData = await telegramService.initUser();
+        console.log('✅ API подключен');
         
-        // 3. Загружаем данные пользователя
-        if (userData) {
-          await initUser(userData);
+        // 2. Проверяем наличие сохраненного токена
+        if (token) {
+          // Верифицируем токен
+          const isValid = await verifyToken();
+          if (isValid) {
+            console.log('✅ Токен валидный, пользователь авторизован');
+            return;
+          }
         }
         
-        console.log('✅ Приложение инициализировано');
+        // 3. Если нет токена или он невалидный, пробуем авторизацию через Telegram
+        if (telegramService.isTelegram()) {
+          console.log('📱 Открыто в Telegram, выполняем авторизацию...');
+          
+          const authData = await telegramService.getAuthData();
+          
+          if (authData.user) {
+            try {
+              const { authAPI } = await import('./services/api');
+              
+              const loginData = {
+                telegramId: authData.user.id.toString(),
+                username: authData.user.username,
+                firstName: authData.user.first_name,
+                lastName: authData.user.last_name,
+                photoUrl: authData.user.photo_url,
+                referralCode: authData.startParam,
+                initData: authData.initData,
+              };
+
+              const response = await authAPI.login(loginData);
+              
+              console.log('✅ Авторизация через Telegram успешна:', response);
+
+              if (response.token) {
+                localStorage.setItem('token', response.token);
+                useUserStore.getState().setToken(response.token);
+              }
+
+              await initUser({
+                ...response.user,
+                token: response.token,
+              });
+              
+              return;
+            } catch (authError) {
+              console.error('❌ Ошибка авторизации через Telegram:', authError);
+            }
+          }
+        }
+        
+        // 4. Если в браузере и нет авторизации, остаемся неавторизованными
+        console.log('ℹ️ Пользователь не авторизован');
         
       } catch (error: any) {
         console.error('❌ Ошибка инициализации:', error);
         useUserStore.getState().setError(error.message);
+      } finally {
+        useUserStore.getState().setLoading(false);
       }
     };
     
     initializeApp();
-  }, []);
+  }, [token]);
 
   // Показываем загрузку
   if (isLoading) {

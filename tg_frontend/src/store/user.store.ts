@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { authAPI, userAPI } from '../services/api';
 
 interface LocalUserStats {
   totalCasesOpened: number;
@@ -32,6 +33,8 @@ interface UserStoreState {
   setLoading: (loading: boolean) => void;
   
   initUser: (userData: any) => Promise<void>;
+  verifyToken: () => Promise<boolean>;
+  fetchUserData: () => Promise<void>;
   updateUserData: (data: Partial<any>) => void;
   
   updateBalance: (newBalance: number) => void;
@@ -68,25 +71,32 @@ export const useUserStore = create<UserStoreState>()(
         try {
           set({ isLoading: true, error: null });
           
+          // Если передан токен, сохраняем его
+          if (userData.token) {
+            localStorage.setItem('token', userData.token);
+            set({ token: userData.token });
+          }
+          
+          // Создаем объект пользователя из данных
           const user = {
             id: userData.id,
-            telegram_id: userData.telegramId,
+            telegram_id: userData.telegramId || userData.telegram_id,
             username: userData.username,
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            avatar_url: userData.avatarUrl,
+            first_name: userData.firstName || userData.first_name,
+            last_name: userData.lastName || userData.last_name,
+            avatar_url: userData.avatarUrl || userData.avatar_url,
             balance: userData.balance || 0,
-            premium_balance: userData.premiumBalance || 0,
-            total_earned: userData.totalEarned || 0,
-            total_spent_rub: userData.totalSpentRub || 0,
-            daily_streak: userData.dailyStreak || 0,
-            referral_code: userData.referralCode,
-            is_admin: userData.isAdmin || false,
-            created_at: userData.createdAt,
-            updated_at: userData.updatedAt
+            premium_balance: userData.premiumBalance || userData.premium_balance || 0,
+            total_earned: userData.totalEarned || userData.total_earned || 0,
+            total_spent_rub: userData.totalSpentRub || userData.total_spent_rub || 0,
+            daily_streak: userData.dailyStreak || userData.daily_streak || 0,
+            referral_code: userData.referralCode || userData.referral_code,
+            is_admin: userData.isAdmin || userData.is_admin || false,
+            created_at: userData.createdAt || userData.created_at,
+            updated_at: userData.updatedAt || userData.updated_at
           };
 
-          set({
+          set({ 
             user,
             balance: user.balance,
             premiumBalance: user.premium_balance,
@@ -95,17 +105,49 @@ export const useUserStore = create<UserStoreState>()(
             stats: userData.stats || null
           });
           
-          if (userData.token) {
-            localStorage.setItem('token', userData.token);
-            set({ token: userData.token });
-          }
+          console.log('✅ Пользователь инициализирован:', user);
           
         } catch (error: any) {
+          console.error('❌ Ошибка инициализации пользователя:', error);
           set({ 
             error: error.message || 'Ошибка инициализации пользователя',
             isLoading: false 
           });
           throw error;
+        }
+      },
+
+      verifyToken: async () => {
+        try {
+          const token = get().token;
+          if (!token) {
+            return false;
+          }
+
+          const response = await authAPI.verify(token);
+          
+          if (response.success && response.user) {
+            await get().initUser(response.user);
+            return true;
+          }
+          
+          return false;
+        } catch (error) {
+          console.error('❌ Ошибка верификации токена:', error);
+          get().logout();
+          return false;
+        }
+      },
+
+      fetchUserData: async () => {
+        try {
+          const response = await userAPI.getProfile();
+          
+          if (response.success && response.data) {
+            get().updateUserData(response.data);
+          }
+        } catch (error) {
+          console.error('❌ Ошибка загрузки данных пользователя:', error);
         }
       },
 
@@ -116,7 +158,14 @@ export const useUserStore = create<UserStoreState>()(
         premiumBalance: user?.premium_balance || 0
       }),
       
-      setToken: (token) => set({ token }),
+      setToken: (token) => {
+        set({ token });
+        if (token) {
+          localStorage.setItem('token', token);
+        } else {
+          localStorage.removeItem('token');
+        }
+      },
       
       setError: (error) => set({ error }),
       
@@ -129,32 +178,38 @@ export const useUserStore = create<UserStoreState>()(
         ...(data.stats && { stats: data.stats })
       })),
       
-      updateBalance: (newBalance) => set({ 
+      updateBalance: (newBalance) => set((state) => ({
         balance: newBalance,
-        user: get().user ? { ...get().user!, balance: newBalance } : null
-      }),
+        user: state.user ? { ...state.user, balance: newBalance } : null
+      })),
       
-      updatePremiumBalance: (newPremiumBalance) => set({ 
+      updatePremiumBalance: (newPremiumBalance) => set((state) => ({
         premiumBalance: newPremiumBalance,
-        user: get().user ? { ...get().user!, premium_balance: newPremiumBalance } : null
+        user: state.user ? { ...state.user, premium_balance: newPremiumBalance } : null
+      })),
+      
+      addBalance: (amount) => set((state) => {
+        const newBalance = state.balance + amount;
+        return {
+          balance: newBalance,
+          user: state.user ? { 
+            ...state.user, 
+            balance: newBalance,
+            total_earned: state.user.total_earned + Math.max(0, amount)
+          } : null
+        };
       }),
       
-      addBalance: (amount) => set((state) => ({ 
-        balance: state.balance + amount,
-        user: state.user ? { 
-          ...state.user, 
-          balance: state.user.balance + amount,
-          total_earned: state.user.total_earned + Math.max(0, amount)
-        } : null
-      })),
-      
-      addPremiumBalance: (amount) => set((state) => ({ 
-        premiumBalance: state.premiumBalance + amount,
-        user: state.user ? { 
-          ...state.user, 
-          premium_balance: state.user.premium_balance + amount 
-        } : null
-      })),
+      addPremiumBalance: (amount) => set((state) => {
+        const newPremiumBalance = state.premiumBalance + amount;
+        return {
+          premiumBalance: newPremiumBalance,
+          user: state.user ? { 
+            ...state.user, 
+            premium_balance: newPremiumBalance 
+          } : null
+        };
+      }),
       
       deductBalance: (amount) => set((state) => {
         const newBalance = Math.max(0, state.balance - amount);
@@ -210,7 +265,9 @@ export const useUserStore = create<UserStoreState>()(
         user: state.user ? {
           id: state.user.id,
           telegram_id: state.user.telegram_id,
-          username: state.user.username
+          username: state.user.username,
+          balance: state.user.balance,
+          premium_balance: state.user.premium_balance
         } : null
       })
     }

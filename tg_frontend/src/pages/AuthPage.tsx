@@ -1,40 +1,130 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, AlertCircle, CheckCircle } from 'lucide-react';
+import { Shield, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import telegramService from '../config/telegram';
+import { authAPI } from '../services/api';
+import { useUserStore } from '../store/user.store';
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
+  const { initUser, user } = useUserStore();
+  
   const [telegramId, setTelegramId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isTelegram, setIsTelegram] = useState(false);
 
-  const handleTelegramLogin = () => {
-    // В реальном приложении здесь будет интеграция с Telegram Login
-    setLoading(true);
-    
-    setTimeout(() => {
-      // Имитация успешного входа
-      setLoading(false);
+  useEffect(() => {
+    // Проверяем, открыто ли приложение в Telegram
+    const tgInitialized = telegramService.isTelegram();
+    setIsTelegram(tgInitialized);
+
+    // Если уже авторизованы, перенаправляем на главную
+    if (user && user.id) {
       navigate('/');
-    }, 1500);
+    }
+
+    // Если в Telegram, автоматически пытаемся авторизоваться
+    if (tgInitialized) {
+      autoLoginTelegram();
+    }
+  }, [user, navigate]);
+
+  const autoLoginTelegram = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      console.log('🔐 Попытка авторизации через Telegram...');
+      
+      // Получаем данные пользователя из Telegram WebApp
+      const authData = await telegramService.getAuthData();
+      
+      if (!authData.user) {
+        throw new Error('Не удалось получить данные пользователя из Telegram');
+      }
+
+      console.log('👤 Telegram данные:', authData);
+
+      // Формируем данные для отправки на бэкенд
+      const loginData = {
+        telegramId: authData.user.id.toString(),
+        username: authData.user.username,
+        firstName: authData.user.first_name,
+        lastName: authData.user.last_name,
+        photoUrl: authData.user.photo_url,
+        referralCode: authData.startParam,
+        initData: authData.initData,
+      };
+
+      // Отправляем запрос на бэкенд
+      const response = await authAPI.login(loginData);
+      
+      console.log('✅ Авторизация успешна:', response);
+
+      // Сохраняем токен и данные пользователя
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        useUserStore.getState().setToken(response.token);
+      }
+
+      // Инициализируем пользователя
+      await initUser({
+        ...response.user,
+        token: response.token,
+      });
+
+      // Перенаправляем на главную
+      navigate('/');
+
+    } catch (err: any) {
+      console.error('❌ Ошибка авторизации:', err);
+      setError(err.message || 'Ошибка авторизации через Telegram');
+      setLoading(false);
+    }
   };
 
-  const handleManualLogin = (e: React.FormEvent) => {
+  const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     
-    setTimeout(() => {
-      if (telegramId.trim()) {
-        // Имитация успешного входа
-        setLoading(false);
-        navigate('/');
-      } else {
+    try {
+      if (!telegramId.trim()) {
         setError('Введите Telegram ID');
         setLoading(false);
+        return;
       }
-    }, 1500);
+
+      // Создаем тестового пользователя
+      const testUser = {
+        telegramId: telegramId.trim(),
+        username: 'test_user_' + telegramId.trim(),
+        firstName: 'Тестовый',
+        lastName: 'Пользователь',
+        balance: 1000,
+        premiumBalance: 100,
+        dailyStreak: 1,
+        referralCode: 'TEST' + Date.now().toString().slice(-6),
+        isAdmin: false,
+      };
+
+      await initUser(testUser);
+      navigate('/');
+
+    } catch (err: any) {
+      setError(err.message || 'Ошибка авторизации');
+      setLoading(false);
+    }
+  };
+
+  const handleRetry = () => {
+    setError('');
+    if (isTelegram) {
+      autoLoginTelegram();
+    }
   };
 
   return (
@@ -50,55 +140,94 @@ const AuthPage: React.FC = () => {
 
         <Card className="p-6 mb-6">
           <h2 className="text-xl font-bold mb-4 text-center">Вход через Telegram</h2>
-          <p className="text-gray-400 text-center mb-6">
-            Для использования всех функций приложения требуется авторизация
-          </p>
+          
+          {isTelegram ? (
+            <>
+              <p className="text-gray-400 text-center mb-6">
+                Вы используете приложение в Telegram. Авторизация выполняется автоматически.
+              </p>
 
-          <Button
-            variant="primary"
-            fullWidth
-            size="lg"
-            loading={loading}
-            onClick={handleTelegramLogin}
-            className="mb-4 py-3"
-          >
-            Войти через Telegram
-          </Button>
+              {loading ? (
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
+                  <p className="text-gray-400">Выполняется авторизация...</p>
+                </div>
+              ) : error ? (
+                <>
+                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <span className="text-red-400 text-sm">{error}</span>
+                  </div>
+                  <Button
+                    variant="primary"
+                    fullWidth
+                    size="lg"
+                    onClick={handleRetry}
+                    className="py-3"
+                  >
+                    Попробовать снова
+                  </Button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <CheckCircle className="w-12 h-12 text-green-400" />
+                  <p className="text-gray-400">Авторизация успешна!</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-gray-400 text-center mb-6">
+                Для использования всех функций приложения требуется авторизация
+              </p>
 
-          <div className="text-center text-sm text-gray-400 mb-6">
-            или
-          </div>
+              <Button
+                variant="primary"
+                fullWidth
+                size="lg"
+                onClick={() => window.open('https://t.me/SkinFactoryArBot/skin_factory', '_blank')}
+                className="mb-4 py-3"
+              >
+                Открыть в Telegram
+              </Button>
 
-          <form onSubmit={handleManualLogin}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">
-                Telegram ID (для тестирования)
-              </label>
-              <input
-                type="text"
-                value={telegramId}
-                onChange={(e) => setTelegramId(e.target.value)}
-                placeholder="Введите Telegram ID"
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg"
-              />
-            </div>
-
-            {error && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-400" />
-                <span className="text-red-400">{error}</span>
+              <div className="text-center text-sm text-gray-400 mb-6">
+                или
               </div>
-            )}
 
-            <Button
-              type="submit"
-              variant="glass"
-              fullWidth
-              loading={loading}
-            >
-              Продолжить
-            </Button>
-          </form>
+              <form onSubmit={handleManualLogin}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">
+                    Telegram ID (для тестирования)
+                  </label>
+                  <input
+                    type="text"
+                    value={telegramId}
+                    onChange={(e) => setTelegramId(e.target.value)}
+                    placeholder="Введите Telegram ID"
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:border-blue-500 focus:outline-none"
+                    disabled={loading}
+                  />
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <span className="text-red-400 text-sm">{error}</span>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="glass"
+                  fullWidth
+                  loading={loading}
+                >
+                  Продолжить
+                </Button>
+              </form>
+            </>
+          )}
         </Card>
 
         <Card className="p-6">
