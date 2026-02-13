@@ -3,8 +3,8 @@ import { config } from '../config/config';
 import { pool } from '../db/database';
 
 const BOT_TOKEN = config.telegram.botToken;
-const FRONTEND_URL = config.telegram.webAppUrl;
-const BOT_USERNAME = config.telegram.botUsername;
+const FRONTEND_URL = config.telegram.webAppUrl || 'https://backend-tg-4k2p.vercel.app/';
+const BOT_USERNAME = config.telegram.botUsername || 'SkinFactoryArBot';
 
 if (!BOT_TOKEN) {
   console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен. Бот не будет работать.');
