@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Navigation } from './components/layout/Navigation';
 import { HomePage } from './pages/HomePage';
@@ -29,8 +29,14 @@ import { ErrorBoundary } from './components/layout/ErrorBoundary';
 function App() {
   const { isAuthenticated, isLoading, initUser, verifyToken, token } = useUserStore();
   const location = useLocation();
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    // Предотвращаем повторную инициализацию
+    if (initialized) {
+      return;
+    }
+
     const initializeApp = async () => {
       try {
         console.log('🚀 Инициализация приложения...');
@@ -46,11 +52,17 @@ function App() {
         
         // 2. Проверяем наличие сохраненного токена
         if (token) {
+          console.log('🔑 Найден сохраненный токен, верифицируем...');
           // Верифицируем токен
           const isValid = await verifyToken();
           if (isValid) {
             console.log('✅ Токен валидный, пользователь авторизован');
+            setInitialized(true);
             return;
+          } else {
+            console.warn('⚠️ Токен невалидный, удаляем...');
+            localStorage.removeItem('token');
+            useUserStore.getState().setToken(null);
           }
         }
         
@@ -96,6 +108,7 @@ function App() {
                 token: response.token,
               });
               
+              setInitialized(true);
               return;
             } catch (authError) {
               console.error('❌ Ошибка авторизации через Telegram:', authError);
@@ -108,17 +121,19 @@ function App() {
         
         // 4. Если в браузере и нет авторизации, остаемся неавторизованными
         console.log('ℹ️ Пользователь не авторизован');
+        setInitialized(true);
         
       } catch (error: any) {
         console.error('❌ Ошибка инициализации:', error);
         useUserStore.getState().setError(error.message);
+        setInitialized(true);
       } finally {
         useUserStore.getState().setLoading(false);
       }
     };
     
     initializeApp();
-  }, [token]);
+  }, [initialized]); // Изменена зависимость с [token] на [initialized]
 
   // Показываем загрузку
   if (isLoading) {
