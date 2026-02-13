@@ -244,7 +244,7 @@ export const systemAPI = {
 export const checkApiConnection = async () => {
   try {
     console.log('🔍 Проверка подключения к API...');
-    console.log('📍 API URL:', config.api.url);
+    console.log('📍 API URL:', config.api.baseUrl);
     console.log('⏱️  Timeout:', config.api.timeout);
     
     const response = await systemAPI.health();
