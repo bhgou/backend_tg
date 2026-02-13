@@ -67,6 +67,7 @@ export const config = {
     allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:5173',
       'http://localhost:3000',
+      'https://tg-frontend-7ltg.vercel.app',
       'https://*.vercel.app',
       'https://skinfactory.com',
     ],
