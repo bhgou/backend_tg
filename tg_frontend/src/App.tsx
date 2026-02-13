@@ -30,7 +30,7 @@ function App() {
   const { isAuthenticated, isLoading, initUser, verifyToken, token } = useUserStore();
   const location = useLocation();
 
-  useEffect(() => {
+  // useEffect(() => {
     const initializeApp = async () => {
       try {
         console.log('🚀 Инициализация приложения...');
@@ -38,7 +38,8 @@ function App() {
         // 1. Проверяем подключение к API
         const apiCheck = await checkApiConnection();
         if (!apiCheck.success) {
-          throw new Error('Не удалось подключиться к серверу');
+          console.error('❌ Ошибка подключения к API:', apiCheck.error, apiCheck.details);
+          throw new Error(`Не удалось подключиться к серверу: ${apiCheck.error}`);
         }
         
         console.log('✅ API подключен');
@@ -73,18 +74,19 @@ function App() {
                 initData: authData.initData,
               };
 
+              console.log('📤 Отправка данных авторизации:', loginData);
               const response = await authAPI.login(loginData);
               
-              console.log('✅ Авторизация через Telegram успешна:', response.data);
+              console.log('✅ Авторизация через Telegram успешна:', response);
 
-              if (response.data.token) {
-                localStorage.setItem('token', response.data.token);
-                useUserStore.getState().setToken(response.data.token);
+              if (response.token) {
+                localStorage.setItem('token', response.token);
+                useUserStore.getState().setToken(response.token);
               }
 
               await initUser({
-                ...response.data.user,
-                token: response.data.token,
+                ...response.user,
+                token: response.token,
               });
               
               return;

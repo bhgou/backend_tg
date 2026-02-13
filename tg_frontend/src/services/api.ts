@@ -114,15 +114,21 @@ api.interceptors.response.use(
       error: error.message || 'Ошибка сети',
     };
     
-    console.error('API Error:', {
+    console.error('🔴 API Error:', {
       url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      method: error.config?.method,
       status: error.response?.status,
+      statusText: error.response?.statusText,
       message: error.message,
+      code: error.code,
       data: errorData,
+      headers: error.config?.headers,
     });
     
     // Обработка различных ошибок
     if (error.response?.status === 401) {
+      console.warn('⚠️ 401 Unauthorized - logging out');
       useUserStore.getState().logout();
       window.location.href = '/auth';
     }
@@ -237,10 +243,20 @@ export const systemAPI = {
 // Проверка подключения
 export const checkApiConnection = async () => {
   try {
+    console.log('🔍 Проверка подключения к API...');
+    console.log('📍 API URL:', config.api.url);
+    console.log('⏱️  Timeout:', config.api.timeout);
+    
     const response = await systemAPI.health();
+    console.log('✅ API Health response:', response);
     return { success: true, data: response };
-  } catch (error) {
-    return { success: false, error };
+  } catch (error: any) {
+    console.error('❌ Ошибка подключения к API:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Не удалось подключиться к серверу',
+      details: error 
+    };
   }
 };
 
