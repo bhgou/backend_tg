@@ -7,11 +7,13 @@ export interface User {
   last_name: string | null;
   avatar_url: string | null;
   balance: number;
+  premium_balance: number;
   total_earned: number;
   daily_streak: number;
   last_daily_at: string | null;
   referral_code: string;
   referred_by: number | null;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -168,6 +170,7 @@ export interface JwtPayload {
 
 // Типы для запросов аутентификации
 export interface AuthRequest {
+  initData: any;
   telegramId: string;
   username?: string;
   firstName?: string;
@@ -262,4 +265,3 @@ export interface ReferralReward {
   is_active: boolean;
   created_at: string;
 }
-

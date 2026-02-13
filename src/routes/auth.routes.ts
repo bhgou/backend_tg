@@ -9,13 +9,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // Регистрация/логин через Telegram
 router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) => {
   try {
-    console.log('🔐 Login request received:', {
-      telegramId: req.body.telegramId,
-      username: req.body.username,
-      hasInitData: !!req.body.initData,
-    });
-
     const { telegramId, username, firstName, lastName, photoUrl, referralCode, initData } = req.body;
+
+    console.log('🔐 Login request received:', {
+      telegramId,
+      username,
+      hasInitData: !!initData,
+    });
 
     if (!telegramId) {
       console.error('❌ Login failed: telegramId is required');
@@ -132,11 +132,12 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
     console.log('✅ Login successful:', { userId: user.id, username });
     res.json(responseData);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Auth error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Ошибка аутентификации';
     res.status(500).json({ 
       success: false,
-      error: error.message || 'Ошибка аутентификации' 
+      error: errorMessage
     });
   }
 });
@@ -184,14 +185,15 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
       }
     };
 
-    console.log('✅ Verify successful:', { userId: user.id, username });
+    console.log('✅ Verify successful:', { userId: user.id, username: user.username });
     res.json(responseData);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Verify error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Неверный токен';
     res.status(401).json({ 
       success: false,
-      error: error.message || 'Неверный токен' 
+      error: errorMessage
     });
   }
 });
