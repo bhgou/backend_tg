@@ -93,7 +93,14 @@ class TelegramService {
   }
 
   public getUser(): TelegramUser | null {
-    return this.webApp?.initDataUnsafe?.user || null;
+    const user = this.webApp?.initDataUnsafe?.user || null;
+    console.log('👤 Telegram.getUser():', {
+      hasWebApp: !!this.webApp,
+      hasInitDataUnsafe: !!this.webApp?.initDataUnsafe,
+      user: user,
+      initDataUnsafe: this.webApp?.initDataUnsafe,
+    });
+    return user;
   }
 
   public getStartParam(): string | null {

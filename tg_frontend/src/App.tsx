@@ -60,6 +60,13 @@ function App() {
           
           const authData = await telegramService.getAuthData();
           
+          console.log('📦 AuthData:', {
+            hasUser: !!authData.user,
+            user: authData.user,
+            hasInitData: !!authData.initData,
+            startParam: authData.startParam,
+          });
+          
           if (authData.user) {
             try {
               const { authAPI } = await import('./services/api');
@@ -93,6 +100,9 @@ function App() {
             } catch (authError) {
               console.error('❌ Ошибка авторизации через Telegram:', authError);
             }
+          } else {
+            console.warn('⚠️ authData.user отсутствует. Пользователь не будет авторизован через Telegram.');
+            console.warn('ℹ️ Это нормально для первого запуска в режиме разработки или если бот не настроен правильно.');
           }
         }
         
