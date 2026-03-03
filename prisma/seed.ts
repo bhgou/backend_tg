@@ -1,3 +1,10 @@
+/**
+ * Seed файл для заполнения базы данных тестовыми данными
+ * Используйте: npx prisma db seed
+ * 
+ * ИЛИ используйте SQL версию в database.ts для прямого pg подключения
+ */
+
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -6,6 +13,7 @@ async function main() {
   console.log('🌱 Начинаем заполнение базы данных...');
 
   // Очищаем существующие данные (опционально)
+  await prisma.gameSession.deleteMany();
   await prisma.marketListing.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.inventoryItem.deleteMany();
@@ -15,63 +23,95 @@ async function main() {
   await prisma.user.deleteMany();
 
   // Создаем скины
-  console.log('Создаем скины...');
+  console.log('📦 Создаем скины...');
   const skins = await prisma.skin.createManyAndReturn({
     data: [
       {
         name: 'AK-47 | Redline',
         weapon: 'AK-47',
         rarity: 'classified',
-        price: 45.50,
-        fragmentsRequired: 15,
-        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FA957PHDfz9H_IVJmI21h_KkYb3QhG5U18lwmOv--oX8iQa3r0Q5ZzzwJI-CJw9tYw6G8lbqk-y-gJG-6Z6bmXMyvXNw5XvVyka2hkQdPYo'
+        price: 4550,
+        fragmentsRequired: 5,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/ak47_redline',
+        isTradable: true
       },
       {
         name: 'AWP | Asiimov',
         weapon: 'AWP',
         rarity: 'covert',
-        price: 120.00,
-        fragmentsRequired: 20,
-        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FAR17PLfYQJK_8W4m5a0mvLwOq7cqWdQ-sJ0xL-Rrd2gjQHhqkI4Z2j1cI-ScldoaVjV-lO9xrrugsC-6sjLwHJl6XQh-z-DyULn10YdP7I9gI2A'
+        price: 12000,
+        fragmentsRequired: 10,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/awp_asiimov',
+        isTradable: true
       },
       {
         name: 'Glock-18 | Water Elemental',
         weapon: 'Glock-18',
         rarity: 'mil-spec',
-        price: 5.50,
+        price: 550,
         fragmentsRequired: 5,
-        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposbaqKAxf0vL3djFN_IVJmI21h_KnZ7rVh29U19d0teXE8IWs2w3s_0o-Yzv1LNeLelc2YViG-1nqkuzvh8e7vZzNmCBh6HYl4n7DgVXp10RIfIs4hUw'
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/glock_water',
+        isTradable: true
       },
       {
         name: 'M4A1-S | Guardian',
         weapon: 'M4A1-S',
         rarity: 'restricted',
-        price: 12.00,
-        fragmentsRequired: 8,
-        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposem2LhNw1fz3Yi5F09q_m4S0m_7zO6-fqWdQ-sJ0xO2Y99Wg3wGx_0U5YjrzLYTEI1c9M1CB-1m7xO28hse-vJ_JnXth7HZ35yvVn0TmmBpJaJh80tSO_g'
+        price: 1200,
+        fragmentsRequired: 5,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/m4a1_guardian',
+        isTradable: true
       },
       {
         name: 'Desert Eagle | Blaze',
         weapon: 'Desert Eagle',
         rarity: 'classified',
-        price: 85.00,
-        fragmentsRequired: 12,
-        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpopujwezhjxszYI2gS09-5lpW0nuPxDLfYkW5F18l4teTE9oX4igPt_Uc6ZGj3I9WXIQY4YgyG-QK8w-3q0JW8vJrKnXU3vXQq5SrD30vgzE5JaeI92LeTtw'
+        price: 8500,
+        fragmentsRequired: 8,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/de_blaze',
+        isTradable: true
+      },
+      {
+        name: 'M4A4 | Howl',
+        weapon: 'M4A4',
+        rarity: 'contraband',
+        price: 250000,
+        fragmentsRequired: 20,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/m4a4_howl',
+        isTradable: true
+      },
+      {
+        name: 'Karambit | Fade',
+        weapon: 'Karambit',
+        rarity: 'covert',
+        price: 320000,
+        fragmentsRequired: 25,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/karambit_fade',
+        isTradable: true
+      },
+      {
+        name: 'AWP | Dragon Lore',
+        weapon: 'AWP',
+        rarity: 'covert',
+        price: 500000,
+        fragmentsRequired: 30,
+        imageUrl: 'https://steamcommunity-a.akamaihd.net/economy/image/awp_dlore',
+        isTradable: true
       }
     ]
   });
 
-  console.log(`Создано ${skins.length} скинов`);
+  console.log(`✅ Создано ${skins.length} скинов`);
 
   // Создаем кейсы
-  console.log('Создаем кейсы...');
+  console.log('🎁 Создаем кейсы...');
   
   const adCase = await prisma.case.create({
     data: {
       name: 'Бесплатный кейс',
-      type: 'ad',
-      description: 'Открывается после просмотра рекламы. Шанс получить фрагмент легендарного скина!',
-      imageUrl: 'https://via.placeholder.com/300x300/1e40af/ffffff?text=Free+Case'
+      type: 'free',
+      description: 'Открывается после просмотра рекламы',
+      isActive: true
     }
   });
 
@@ -80,8 +120,9 @@ async function main() {
       name: 'Стандартный кейс',
       type: 'standard',
       price: 500,
-      description: 'Обычные и редкие скины. Отличный способ начать коллекцию!',
-      imageUrl: 'https://via.placeholder.com/300x300/3b82f6/ffffff?text=Standard+Case'
+      premiumPrice: 50,
+      description: 'Обычные и редкие скины',
+      isActive: true
     }
   });
 
@@ -90,27 +131,26 @@ async function main() {
       name: 'Премиум кейс',
       type: 'premium',
       price: 1500,
-      description: 'Редкие и легендарные скины с увеличенным шансом на выпадение!',
-      imageUrl: 'https://via.placeholder.com/300x300/8b5cf6/ffffff?text=Premium+Case'
+      premiumPrice: 100,
+      description: 'Редкие и легендарные скины',
+      isActive: true
+    }
+  });
+
+  const fragmentCase = await prisma.case.create({
+    data: {
+      name: 'Фрагментный кейс',
+      type: 'fragment',
+      price: 1000,
+      premiumPrice: 80,
+      description: 'Фрагменты реальных скинов',
+      isActive: true
     }
   });
 
   // Создаем дропы для кейсов
-  console.log('Создаем дропы для кейсов...');
+  console.log('🎲 Создаем дропы для кейсов...');
   
-  // Дропы для бесплатного кейса (только фрагменты)
-  for (const skin of skins) {
-    await prisma.caseDrop.create({
-      data: {
-        caseId: adCase.id,
-        skinId: skin.id,
-        probability: 0.20, // 20% шанс на каждый фрагмент
-        isFragment: true,
-        fragments: Math.ceil(skin.fragmentsRequired / 3) // 1/3 от нужного количества
-      }
-    });
-  }
-
   // Дропы для стандартного кейса
   const standardDrops = [
     { skinId: skins[2].id, probability: 0.50 }, // Glock-18 (50%)
@@ -126,7 +166,9 @@ async function main() {
         skinId: drop.skinId,
         probability: drop.probability,
         isFragment: false,
-        fragments: 1
+        fragments: 1,
+        dropType: 'regular',
+        rewardType: 'skin'
       }
     });
   }
@@ -136,8 +178,8 @@ async function main() {
     { skinId: skins[0].id, probability: 0.40 }, // AK-47 (40%)
     { skinId: skins[1].id, probability: 0.25 }, // AWP (25%)
     { skinId: skins[4].id, probability: 0.20 }, // Desert Eagle (20%)
-    { skinId: skins[0].id, probability: 0.10, isFragment: true, fragments: 5 }, // Фрагменты AK-47
-    { skinId: skins[1].id, probability: 0.05, isFragment: true, fragments: 3 }  // Фрагменты AWP
+    { skinId: skins[0].id, probability: 0.10, isFragment: true, fragments: 5 },
+    { skinId: skins[1].id, probability: 0.05, isFragment: true, fragments: 3 }
   ];
 
   for (const drop of premiumDrops) {
@@ -147,23 +189,56 @@ async function main() {
         skinId: drop.skinId,
         probability: drop.probability,
         isFragment: drop.isFragment || false,
-        fragments: drop.fragments || 1
+        fragments: drop.fragments || 1,
+        dropType: drop.isFragment ? 'fragment' : 'regular',
+        rewardType: drop.isFragment ? 'fragment' : 'skin'
+      }
+    });
+  }
+
+  // Фрагменты для фрагментного кейса
+  for (const skin of skins) {
+    await prisma.caseDrop.create({
+      data: {
+        caseId: fragmentCase.id,
+        skinId: skin.id,
+        probability: 0.25,
+        isFragment: true,
+        fragments: Math.floor(Math.random() * 3) + 1,
+        dropType: 'fragment',
+        rewardType: 'fragment'
       }
     });
   }
 
   // Создаем тестового пользователя
-  console.log('Создаем тестового пользователя...');
+  console.log('👤 Создаем тестового пользователя...');
   
   const testUser = await prisma.user.create({
     data: {
-      telegramId: 123456789,
+      telegramId: BigInt('123456789'),
       username: 'testuser',
       firstName: 'Test',
       lastName: 'User',
       balance: 5000,
+      premiumBalance: 1000,
       totalEarned: 10000,
-      dailyStreak: 5
+      dailyStreak: 5,
+      referralCode: 'test_referral'
+    }
+  });
+
+  // Создаем админа
+  const adminUser = await prisma.user.create({
+    data: {
+      telegramId: BigInt('777777777'),
+      username: 'admin',
+      firstName: 'Администратор',
+      lastName: 'Системы',
+      balance: 100000,
+      premiumBalance: 50000,
+      isAdmin: true,
+      referralCode: 'admin_referral'
     }
   });
 
@@ -178,7 +253,8 @@ async function main() {
         imageUrl: skins[2].imageUrl,
         isFragment: false,
         fragments: 1,
-        price: skins[2].price
+        price: skins[2].price,
+        isMarketable: true
       },
       {
         userId: testUser.id,
@@ -188,7 +264,8 @@ async function main() {
         imageUrl: skins[0].imageUrl,
         isFragment: true,
         fragments: 8, // 8 из 15 нужных
-        price: skins[0].price
+        price: skins[0].price,
+        isMarketable: false
       }
     ]
   });
@@ -213,15 +290,80 @@ async function main() {
         type: 'referral',
         amount: 200,
         metadata: { referredUserId: 'friend123' }
+      },
+      {
+        userId: testUser.id,
+        type: 'welcome_bonus',
+        amount: 500,
+        metadata: { source: 'registration' }
       }
     ]
   });
 
-  console.log('✅ База данных успешно заполнена!');
-  console.log(`👤 Тестовый пользователь: ${testUser.username} (ID: ${testUser.id})`);
-  console.log(`💰 Баланс: ${testUser.balance} CR`);
-  console.log(`📦 Скинов в инвентаре: 2`);
-  console.log(`🎮 Кейсов доступно: 3`);
+  // Создаем каналы для подписки
+  console.log('📢 Создаем каналы...');
+  await prisma.channel.createMany({
+    data: [
+      {
+        name: 'Skin Factory News',
+        username: 'skinfactorynews',
+        inviteLink: 'https://t.me/skinfactorynews',
+        rewardType: 'balance',
+        rewardValue: 500,
+        isActive: true,
+        isRequired: true
+      },
+      {
+        name: 'CS:GO Deals',
+        username: 'csgodeals',
+        inviteLink: 'https://t.me/csgodeals',
+        rewardType: 'fragment',
+        rewardValue: 3,
+        isActive: true,
+        isRequired: false
+      },
+      {
+        name: 'Skin Factory Chat',
+        username: 'skinfactorychat',
+        inviteLink: 'https://t.me/skinfactorychat',
+        rewardType: 'premium',
+        rewardValue: 100,
+        isActive: true,
+        isRequired: false
+      }
+    ]
+  });
+
+  // Создаем мини-игры
+  console.log('🎮 Создаем мини-игры...');
+  await prisma.minigame.createMany({
+    data: [
+      { name: 'Кости', type: 'dice', minBet: 10, maxBet: 1000, winMultiplier: 2.0, isActive: true },
+      { name: 'Рулетка', type: 'roulette', minBet: 50, maxBet: 5000, winMultiplier: 3.0, isActive: true },
+      { name: 'Слоты', type: 'slots', minBet: 20, maxBet: 2000, winMultiplier: 5.0, isActive: true },
+      { name: 'Орёл и решка', type: 'coinflip', minBet: 10, maxBet: 1000, winMultiplier: 1.95, isActive: true }
+    ]
+  });
+
+  // Создаем настройки приложения
+  console.log('⚙️ Создаем настройки...');
+  await prisma.appSetting.createMany({
+    data: [
+      { key: 'premium_currency_name', value: 'GC', type: 'string', description: 'Название премиум валюты' },
+      { key: 'withdrawal_fee_percent', value: '5', type: 'number', description: 'Комиссия за вывод (%)' },
+      { key: 'referral_bonus', value: '200', type: 'number', description: 'Бонус за реферала' },
+      { key: 'daily_reward_base', value: '100', type: 'number', description: 'Базовая ежедневная награда' },
+      { key: 'min_withdrawal_amount', value: '1000', type: 'number', description: 'Минимальная сумма вывода' }
+    ]
+  });
+
+  console.log('\n✅ База данных успешно заполнена!');
+  console.log(`\n📊 Итоги:`);
+  console.log(`  👤 Пользователей: 2 (admin + testuser)`);
+  console.log(`  🎁 Кейсов: 4`);
+  console.log(`  🔫 Скинов: ${skins.length}`);
+  console.log(`  📢 Каналов: 3`);
+  console.log(`  🎮 Мини-игр: 4`);
 }
 
 main()

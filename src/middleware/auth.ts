@@ -10,7 +10,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: {
-        id: number;
+        id: string;
         telegramId: string;
         username: string | null;
       };
@@ -23,7 +23,10 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Требуется аутентификация' });
+      return res.status(401).json({ 
+        success: false,
+        error: 'Требуется аутентификация' 
+      });
     }
 
     const token = authHeader.split(' ')[1];
@@ -38,7 +41,10 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     );
 
     if (userResult.rows.length === 0) {
-      return res.status(401).json({ error: 'Пользователь не найден' });
+      return res.status(401).json({ 
+        success: false,
+        error: 'Пользователь не найден' 
+      });
     }
 
     // Добавляем пользователя в запрос
@@ -50,11 +56,17 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
     next();
   } catch (error: unknown) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({ error: 'Неверный токен' });
+    if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'Неверный или истекший токен' 
+      });
     }
     
     console.error('Auth middleware error:', error);
-    res.status(500).json({ error: 'Ошибка аутентификации' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Ошибка аутентификации' 
+    });
   }
 };

@@ -1,9 +1,6 @@
 {
   "watch": ["src"],
-  "ignore": ["node_modules", "dist", "client", "prisma"],
-  "ext": "ts,js,json",
-  "exec": "ts-node src/index.ts",
-  "env": {
-    "NODE_ENV": "development"
-  }
+  "ext": "ts,json",
+  "ignore": ["src/**/*.spec.ts"],
+  "exec": "ts-node ./src/index.ts"
 }

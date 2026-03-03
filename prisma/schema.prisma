@@ -15,11 +15,14 @@ model User {
   lastName      String?   @db.VarChar(255)
   avatarUrl     String?   @db.VarChar(500)
   balance       Int       @default(0)
+  premiumBalance Int      @default(0)
   totalEarned   Int       @default(0)
+  totalSpentRub Float     @default(0)
   dailyStreak   Int       @default(0)
   lastDailyAt   DateTime?
   referralCode  String    @unique @default(cuid()) @db.VarChar(50)
   referredBy    String?   @db.VarChar(50)
+  isAdmin       Boolean   @default(false)
   createdAt     DateTime  @default(now()) @db.Timestamp(6)
   updatedAt     DateTime  @updatedAt @db.Timestamp(6)
   
@@ -28,6 +31,10 @@ model User {
   transactions  Transaction[]
   marketListings MarketListing[]
   referrals     User[]          @relation("UserReferrals")
+  subscriptions UserSubscription[]
+  gameSessions  GameSession[]
+  premiumPayments PremiumPayment[]
+  withdrawalRequests WithdrawalRequest[]
   
   @@index([telegramId])
   @@map("users")
@@ -37,11 +44,12 @@ model Skin {
   id                String    @id @default(cuid())
   name              String    @db.VarChar(255)
   weapon            String    @db.VarChar(100)
-  rarity            String    @db.VarChar(50) // common, uncommon, rare, mythical, legendary
+  rarity            String    @db.VarChar(50)
   price             Float     @db.Decimal(10, 2)
   imageUrl          String?   @db.VarChar(500)
   fragmentsRequired Int       @default(1)
   isTradable        Boolean   @default(true)
+  steamPrice        Float?    @db.Decimal(10, 2)
   createdAt         DateTime  @default(now()) @db.Timestamp(6)
   
   // Relations
@@ -61,6 +69,7 @@ model InventoryItem {
   isFragment  Boolean   @default(false)
   fragments   Int       @default(1)
   price       Float?    @db.Decimal(10, 2)
+  isMarketable Boolean  @default(true)
   createdAt   DateTime  @default(now()) @db.Timestamp(6)
   
   // Relations
@@ -76,8 +85,9 @@ model InventoryItem {
 model Case {
   id          String    @id @default(cuid())
   name        String    @db.VarChar(255)
-  type        String    @db.VarChar(50) // ad, standard, premium, sponsor
-  price       Int?      // null для ad-case
+  type        String    @db.VarChar(50)
+  price       Int?
+  premiumPrice Int?
   imageUrl    String?   @db.VarChar(500)
   description String?   @db.Text
   isActive    Boolean   @default(true)
@@ -97,6 +107,9 @@ model CaseDrop {
   probability Float     @default(0.01) @db.Decimal(5, 4)
   isFragment  Boolean   @default(false)
   fragments   Int       @default(1)
+  dropType    String    @default("regular")
+  rewardType  String    @default("skin")
+  rewardValue Int       @default(1)
   
   // Relations
   case        Case      @relation(fields: [caseId], references: [id])
@@ -109,9 +122,9 @@ model CaseDrop {
 model Transaction {
   id          String    @id @default(cuid())
   userId      String
-  type        String    @db.VarChar(50) // daily_reward, ad_watch, referral, case_open, market
+  type        String    @db.VarChar(50)
   amount      Int
-  metadata    Json?     @db.Json
+  metadata    Json?
   createdAt   DateTime  @default(now()) @db.Timestamp(6)
   
   // Relations
@@ -131,6 +144,9 @@ model MarketListing {
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now()) @db.Timestamp(6)
   soldAt      DateTime? @db.Timestamp(6)
+  expiresAt   DateTime? @db.Timestamp(6)
+  feePercentage Float   @default(3.0)
+  buyerId     String?
   
   // Relations
   seller      User      @relation(fields: [sellerId], references: [id])
@@ -139,4 +155,205 @@ model MarketListing {
   @@index([isActive])
   @@index([createdAt])
   @@map("market_listings")
+}
+
+model Channel {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(255)
+  username    String?   @db.VarChar(255)
+  inviteLink  String    @db.VarChar(500)
+  rewardType  String    @default("fragment")
+  rewardValue Int       @default(10)
+  isActive    Boolean   @default(true)
+  isRequired  Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  subscriptions UserSubscription[]
+  
+  @@map("channels")
+}
+
+model UserSubscription {
+  id              String    @id @default(cuid())
+  userId          String
+  channelId       String
+  telegramUsername String? @db.VarChar(255)
+  subscribedAt    DateTime  @default(now()) @db.Timestamp(6)
+  verified        Boolean   @default(false)
+  rewardClaimed   Boolean   @default(false)
+  
+  // Relations
+  user          User        @relation(fields: [userId], references: [id])
+  channel       Channel     @relation(fields: [channelId], references: [id])
+  
+  @@unique([userId, channelId])
+  @@map("user_subscriptions")
+}
+
+model RealSkin {
+  id                String    @id @default(cuid())
+  steamMarketId     String?   @unique @db.VarChar(100)
+  name              String    @db.VarChar(255)
+  weapon            String    @db.VarChar(100)
+  rarity            String    @db.VarChar(50)
+  exterior          String?   @db.VarChar(50)
+  floatValue        Float?    @db.Decimal(8, 6)
+  steamPrice        Float     @db.Decimal(10, 2)
+  imageUrl          String    @db.VarChar(500)
+  fragmentsRequired Int       @default(5)
+  premiumFee        Int       @default(100)
+  tradeable         Boolean   @default(true)
+  isStattrak        Boolean   @default(false)
+  isSouvenir        Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  withdrawalRequests WithdrawalRequest[]
+  fragments       RealSkinFragment[]
+  
+  @@map("real_skins")
+}
+
+model WithdrawalRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  realSkinId      String
+  steamTradeLink  String    @db.VarChar(500)
+  status          String    @default("pending") @db.VarChar(50)
+  fragmentsUsed   Int
+  premiumPaid     Int       @default(0)
+  adminNotes      String?   @db.Text
+  createdAt       DateTime  @default(now()) @db.Timestamp(6)
+  processedAt     DateTime? @db.Timestamp(6)
+  
+  // Relations
+  user          User        @relation(fields: [userId], references: [id])
+  realSkin      RealSkin    @relation(fields: [realSkinId], references: [id])
+  
+  @@map("withdrawal_requests")
+}
+
+model RealSkinFragment {
+  id          String    @id @default(cuid())
+  userId      String
+  realSkinId  String
+  fragments   Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  realSkin    RealSkin  @relation(fields: [realSkinId], references: [id])
+  
+  @@map("real_skin_fragments")
+}
+
+model PremiumPayment {
+  id          String    @id @default(cuid())
+  userId      String
+  amountRub   Float     @db.Decimal(10, 2)
+  amountPremium Int
+  paymentMethod String? @db.VarChar(50)
+  paymentId   String    @unique @db.VarChar(100)
+  status      String    @default("pending") @db.VarChar(50)
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  completedAt DateTime? @db.Timestamp(6)
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  
+  @@map("premium_payments")
+}
+
+model Minigame {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(255)
+  type        String    @db.VarChar(50)
+  minBet      Int       @default(10)
+  maxBet      Int       @default(1000)
+  winMultiplier Float   @default(2.0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  gameSessions GameSession[]
+  
+  @@map("minigames")
+}
+
+model GameSession {
+  id          String    @id @default(cuid())
+  userId      String
+  minigameId  String
+  bet         Int
+  winAmount   Int?
+  result      Json?
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  minigame    Minigame  @relation(fields: [minigameId], references: [id])
+  
+  @@index([userId])
+  @@index([minigameId])
+  @@map("game_sessions")
+}
+
+model AppSetting {
+  id          String    @id @default(cuid())
+  key         String    @unique @db.VarChar(100)
+  value       String?   @db.Text
+  type        String    @default("string") @db.VarChar(50)
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  @@map("app_settings")
+}
+
+model ReferralReward {
+  id          String    @id @default(cuid())
+  level       Int
+  rewardType  String    @db.VarChar(50)
+  rewardValue Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  @@map("referral_rewards")
+}
+
+model Sponsor {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(255)
+  username    String?   @db.VarChar(100)
+  inviteLink  String    @db.VarChar(500)
+  rewardType  String    @default("fragment") @db.VarChar(50)
+  rewardValue Int       @default(10)
+  premiumReward Int     @default(50)
+  isActive    Boolean   @default(true)
+  priority    Int       @default(1)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  
+  // Relations
+  subscriptions SponsorSubscription[]
+  
+  @@map("sponsors")
+}
+
+model SponsorSubscription {
+  id              String    @id @default(cuid())
+  userId          String
+  sponsorId       String
+  telegramUsername String? @db.VarChar(100)
+  subscribedAt    DateTime  @default(now()) @db.Timestamp(6)
+  verified        Boolean   @default(false)
+  rewardClaimed   Boolean   @default(false)
+  
+  // Relations
+  user          User        @relation(fields: [userId], references: [id])
+  sponsor       Sponsor     @relation(fields: [sponsorId], references: [id])
+  
+  @@unique([userId, sponsorId])
+  @@map("sponsor_subscriptions")
 }

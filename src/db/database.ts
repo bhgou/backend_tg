@@ -103,6 +103,7 @@ export const initDatabase = async (): Promise<void> => {
         is_fragment BOOLEAN DEFAULT false,
         fragments INTEGER DEFAULT 1,
         price DECIMAL(10,2),
+        is_marketable BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -160,7 +161,39 @@ export const initDatabase = async (): Promise<void> => {
         price INTEGER NOT NULL,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        sold_at TIMESTAMP
+        sold_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        fee_percentage DECIMAL(5,2) DEFAULT 3.0,
+        buyer_id INTEGER REFERENCES users(id)
+      );
+    `);
+
+    // Таблица каналов
+    await query(client, `
+      CREATE TABLE IF NOT EXISTS channels (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        username VARCHAR(255),
+        invite_link VARCHAR(500) NOT NULL,
+        reward_type VARCHAR(50) DEFAULT 'fragment',
+        reward_value INTEGER DEFAULT 10,
+        is_active BOOLEAN DEFAULT true,
+        is_required BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Таблица подписок пользователей
+    await query(client, `
+      CREATE TABLE IF NOT EXISTS user_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        telegram_username VARCHAR(255),
+        subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        verified BOOLEAN DEFAULT false,
+        reward_claimed BOOLEAN DEFAULT false,
+        UNIQUE(user_id, channel_id)
       );
     `);
 
@@ -369,6 +402,16 @@ export const seedDatabase = async (): Promise<void> => {
       ON CONFLICT DO NOTHING
     `);
 
+    // Каналы для подписки
+    await query(client, `
+      INSERT INTO channels (name, username, invite_link, reward_type, reward_value) 
+      VALUES 
+        ('Skin Factory News', 'skinfactorynews', 'https://t.me/skinfactorynews', 'balance', 500),
+        ('CS:GO Deals', 'csgodeals', 'https://t.me/csgodeals', 'fragment', 3),
+        ('Skin Factory Chat', 'skinfactorychat', 'https://t.me/skinfactorychat', 'premium', 100)
+      ON CONFLICT DO NOTHING
+    `);
+
     // Спонсоры
     await query(client, `
       INSERT INTO sponsors (name, username, invite_link, reward_type, reward_value, premium_reward, priority) 
@@ -383,23 +426,12 @@ export const seedDatabase = async (): Promise<void> => {
 
     // Реальные скины CS:GO
     await query(client, `
-      INSERT INTO skins (name, weapon, rarity, price, fragments_required, steam_price) 
+      INSERT INTO real_skins (name, weapon, rarity, steam_price, fragments_required, image_url) 
       VALUES 
-        ('AK-47 | Redline (Field-Tested)', 'AK-47', 'Classified', 4550, 5, 45.50),
-        ('Glock-18 | Water Elemental (Field-Tested)', 'Glock-18', 'Mil-Spec', 550, 5, 5.50),
-        ('M4A1-S | Guardian (Field-Tested)', 'M4A1-S', 'Restricted', 1200, 5, 12.00),
-        ('AWP | Asiimov (Field-Tested)', 'AWP', 'Covert', 12000, 10, 120.00),
-        ('Desert Eagle | Blaze (Factory New)', 'Desert Eagle', 'Classified', 8500, 8, 85.00),
-        ('M4A4 | Howl (Factory New)', 'M4A4', 'Contraband', 250000, 20, 2500.00),
-        ('Karambit | Fade (Factory New)', 'Karambit', 'Covert', 320000, 25, 3200.00),
-        ('AWP | Dragon Lore (Factory New)', 'AWP', 'Covert', 500000, 30, 5000.00),
-        ('M4A4 | Poseidon (Factory New)', 'M4A4', 'Covert', 180000, 15, 1800.00),
-        ('AK-47 | Fire Serpent (Field-Tested)', 'AK-47', 'Covert', 95000, 12, 950.00),
-        ('USP-S | Kill Confirmed (Factory New)', 'USP-S', 'Classified', 6500, 6, 65.00),
-        ('Desert Eagle | Hand Cannon (Factory New)', 'Desert Eagle', 'Classified', 4500, 5, 45.00),
-        ('P90 | Asiimov (Factory New)', 'P90', 'Restricted', 2500, 4, 25.00),
-        ('AWP | Hyper Beast (Field-Tested)', 'AWP', 'Classified', 18000, 8, 180.00),
-        ('M4A1-S | Cyrex (Factory New)', 'M4A1-S', 'Classified', 4200, 5, 42.00)
+        ('AK-47 | Redline (Field-Tested)', 'AK-47', 'Classified', 45.50, 5, 'https://steamcommunity-a.akamaihd.net/economy/image/ak47_redline'),
+        ('AWP | Asiimov (Field-Tested)', 'AWP', 'Covert', 120.00, 10, 'https://steamcommunity-a.akamaihd.net/economy/image/awp_asiimov'),
+        ('M4A4 | Howl (Factory New)', 'M4A4', 'Contraband', 2500.00, 20, 'https://steamcommunity-a.akamaihd.net/economy/image/m4a4_howl'),
+        ('Karambit | Fade (Factory New)', 'Karambit', 'Covert', 3200.00, 25, 'https://steamcommunity-a.akamaihd.net/economy/image/karambit_fade')
       ON CONFLICT DO NOTHING
     `);
 
@@ -444,36 +476,23 @@ export const seedDatabase = async (): Promise<void> => {
     // Добавляем дропы в кейсы
     const cases = await query(client, 'SELECT id FROM cases');
     const skins = await query(client, 'SELECT id FROM skins');
-    const realSkins = await query(client, 'SELECT id FROM real_skins');
 
-    // Регулярные дропы (скины)
-    for (const skin of skins.rows.slice(0, 5)) {
-      await query(client, `
-        INSERT INTO case_drops (case_id, skin_id, probability, is_fragment, drop_type, reward_type)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [cases.rows[1].id, skin.id, 0.15, false, 'regular', 'skin']);
-    }
+    if (cases.rows.length > 0 && skins.rows.length > 0) {
+      // Дропы для стандартного кейса
+      for (const skin of skins.rows.slice(0, 5)) {
+        await query(client, `
+          INSERT INTO case_drops (case_id, skin_id, probability, is_fragment, drop_type, reward_type)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [cases.rows[1].id, skin.id, 0.15, false, 'regular', 'skin']);
+      }
 
-    // Фрагменты обычных скинов
-    for (const skin of skins.rows) {
-      await query(client, `
-        INSERT INTO case_drops (case_id, skin_id, probability, is_fragment, fragments, drop_type, reward_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [cases.rows[3].id, skin.id, 0.25, true, Math.floor(Math.random() * 3) + 1, 'fragment', 'fragment']);
-    }
-
-    // Премиум валюта в кейсах
-    await query(client, `
-      INSERT INTO case_drops (case_id, skin_id, probability, is_fragment, fragments, drop_type, reward_type, reward_value)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `, [cases.rows[4].id, null, 0.10, false, 1, 'premium', 'premium', 100]);
-
-    // Фрагменты реальных скинов
-    for (const realSkin of realSkins.rows) {
-      await query(client, `
-        INSERT INTO case_drops (case_id, skin_id, probability, is_fragment, fragments, drop_type, reward_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [cases.rows[4].id, null, 0.05, true, 1, 'real_skin_fragment', 'real_fragment']);
+      // Фрагменты для фрагментного кейса
+      for (const skin of skins.rows) {
+        await query(client, `
+          INSERT INTO case_drops (case_id, skin_id, probability, is_fragment, fragments, drop_type, reward_type)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [cases.rows[3].id, skin.id, 0.25, true, Math.floor(Math.random() * 3) + 1, 'fragment', 'fragment']);
+      }
     }
 
     await query(client, 'COMMIT');
@@ -505,13 +524,7 @@ export const getDatabaseStats = async (): Promise<any> => {
         (SELECT COUNT(*) FROM premium_payments WHERE status = 'completed') as total_payments
     `);
 
-       await query(client, 'COMMIT');
-    console.log('✅ Реальные данные успешно добавлены!');
-
- } catch (error: any) {
-    await query(client, 'ROLLBACK');
-    console.error('❌ Ошибка при заполнении данных:', error.message);
-    throw error;
+    return result.rows[0];
   } finally {
     client.release();
   }

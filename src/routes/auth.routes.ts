@@ -28,7 +28,7 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
       [telegramId]
     );
 
-    let user: User;
+    let user: any;
     
     if (existingUser.rows.length > 0) {
       // Обновляем существующего пользователя
@@ -46,7 +46,7 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
       // Создаем нового пользователя
       console.log('🆕 Creating new user:', { telegramId, username });
       
-      let referredBy: number | null = null;
+      let referredBy: string | null = null;
       
       // Проверяем реферальный код
       if (referralCode) {
@@ -124,7 +124,7 @@ router.post('/login', async (req: Request<{}, {}, AuthRequest>, res: Response) =
         totalEarned: user.total_earned,
         dailyStreak: user.daily_streak,
         referralCode: user.referral_code,
-        isAdmin: user.is_admin,
+        isAdmin: user.is_admin || false,
         createdAt: user.created_at
       }
     };
@@ -152,7 +152,7 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
       return res.status(400).json({ success: false, error: 'Токен обязателен' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; telegramId: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; telegramId: string };
     
     const userResult = await pool.query(
       'SELECT * FROM users WHERE id = $1',
@@ -164,7 +164,7 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
       return res.status(401).json({ success: false, error: 'Пользователь не найден' });
     }
 
-    const user: User = userResult.rows[0];
+    const user: any = userResult.rows[0];
 
     const responseData = {
       success: true,
@@ -180,7 +180,7 @@ router.post('/verify', async (req: Request<{}, {}, { token: string }>, res: Resp
         totalEarned: user.total_earned,
         dailyStreak: user.daily_streak,
         referralCode: user.referral_code,
-        isAdmin: user.is_admin,
+        isAdmin: user.is_admin || false,
         createdAt: user.created_at
       }
     };

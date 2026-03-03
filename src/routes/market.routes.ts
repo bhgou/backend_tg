@@ -2,7 +2,6 @@
 import express, { Request, Response } from 'express';
 import { pool } from '../db/database';
 import { authenticate } from '../middleware/auth';
-import { validateMarketListing } from '../middleware/validation';
 
 const router = express.Router();
 
@@ -27,7 +26,6 @@ router.get('/', async (req: Request, res: Response) => {
         ml.*,
         ii.name,
         ii.rarity,
-        ii.weapon,
         ii.image_url,
         ii.is_fragment,
         ii.fragments,
@@ -38,7 +36,6 @@ router.get('/', async (req: Request, res: Response) => {
       JOIN inventory_items ii ON ml.item_id = ii.id
       JOIN users u ON ml.seller_id = u.id
       WHERE ml.is_active = true 
-      AND ml.expires_at > NOW()
     `;
 
     const params: any[] = [];
@@ -95,7 +92,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Получаем общее количество
     const countQuery = query.replace(
-      'SELECT ml.*, ii.name, ii.rarity, ii.weapon, ii.image_url, ii.is_fragment, ii.fragments, ii.price as item_price, u.username as seller_username, u.telegram_id as seller_telegram_id',
+      'SELECT ml.*, ii.name, ii.rarity, ii.image_url, ii.is_fragment, ii.fragments, ii.price as item_price, u.username as seller_username, u.telegram_id as seller_telegram_id',
       'SELECT COUNT(*)'
     ).split(' LIMIT ')[0];
 
@@ -110,7 +107,7 @@ router.get('/', async (req: Request, res: Response) => {
         COALESCE(AVG(price), 0) as average_price,
         COUNT(DISTINCT seller_id) as active_sellers
       FROM market_listings 
-      WHERE is_active = true AND expires_at > NOW()
+      WHERE is_active = true
     `);
 
     res.json({
@@ -132,7 +129,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Создание лота
-router.post('/listings', authenticate, validateMarketListing, async (req: Request, res: Response) => {
+router.post('/listings', authenticate, async (req: Request, res: Response) => {
   const userId = req.user!.id;
   const { itemId, price, duration = 7 } = req.body;
 
@@ -144,7 +141,7 @@ router.post('/listings', authenticate, validateMarketListing, async (req: Reques
     // 1. Проверяем предмет
     const itemResult = await client.query(
       `SELECT * FROM inventory_items 
-       WHERE id = $1 AND user_id = $2 AND is_tradable = true AND is_marketable = true`,
+       WHERE id = $1 AND user_id = $2`,
       [itemId, userId]
     );
 
@@ -152,7 +149,7 @@ router.post('/listings', authenticate, validateMarketListing, async (req: Reques
       await client.query('ROLLBACK');
       return res.status(400).json({ 
         success: false, 
-        error: 'Предмет не найден или не может быть продан' 
+        error: 'Предмет не найден или не принадлежит вам' 
       });
     }
 
@@ -183,7 +180,6 @@ router.post('/listings', authenticate, validateMarketListing, async (req: Reques
 
     // 4. Рассчитываем комиссию
     const feePercentage = getFeePercentage(duration);
-    const fee = Math.floor(price * feePercentage / 100);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + duration);
 
@@ -198,28 +194,10 @@ router.post('/listings', authenticate, validateMarketListing, async (req: Reques
 
     const listing = listingResult.rows[0];
 
-    // 6. Обновляем предмет (помечаем как выставленный)
+    // 6. Помечаем предмет как выставленный
     await client.query(
       `UPDATE inventory_items SET is_marketable = false WHERE id = $1`,
       [itemId]
-    );
-
-    // 7. Записываем транзакцию
-    await client.query(
-      `INSERT INTO transactions (user_id, type, amount, metadata) 
-       VALUES ($1, 'market_listing', $2, $3)`,
-      [
-        userId,
-        -fee,
-        JSON.stringify({
-          listingId: listing.id,
-          itemId,
-          price,
-          fee,
-          duration,
-          expiresAt: expiresAt.toISOString()
-        })
-      ]
     );
 
     await client.query('COMMIT');
@@ -255,8 +233,7 @@ router.post('/buy', authenticate, async (req: Request, res: Response) => {
        FROM market_listings ml
        JOIN inventory_items ii ON ml.item_id = ii.id
        JOIN users u ON ml.seller_id = u.id
-       WHERE ml.id = $1 AND ml.is_active = true 
-       AND ml.expires_at > NOW()
+       WHERE ml.id = $1 AND ml.is_active = true
        FOR UPDATE`,
       [listingId]
     );
@@ -389,6 +366,90 @@ router.post('/buy', authenticate, async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Ошибка покупки предмета' });
   } finally {
     client.release();
+  }
+});
+
+// Снятие лота с продажи
+router.post('/listings/:id/cancel', authenticate, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Проверяем, существует ли лот и принадлежит ли пользователю
+    const listingResult = await client.query(
+      `SELECT * FROM market_listings 
+       WHERE id = $1 AND seller_id = $2 AND is_active = true`,
+      [id, userId]
+    );
+
+    if (listingResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Лот не найден или не принадлежит вам' 
+      });
+    }
+
+    const listing = listingResult.rows[0];
+
+    // Возвращаем предмету статус markable
+    await client.query(
+      `UPDATE inventory_items SET is_marketable = true WHERE id = $1`,
+      [listing.item_id]
+    );
+
+    // Деактивируем лот
+    await client.query(
+      `UPDATE market_listings SET is_active = false WHERE id = $1`,
+      [id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: 'Лот успешно снят с продажи'
+    });
+
+  } catch (error: unknown) {
+    await client.query('ROLLBACK');
+    console.error('Cancel listing error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка снятия лота' });
+  } finally {
+    client.release();
+  }
+});
+
+// История продаж пользователя
+router.get('/history', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { limit = '20' } = req.query;
+
+    const historyResult = await pool.query(
+      `SELECT 
+        t.*,
+        t.metadata->>'itemName' as item_name,
+        t.metadata->>'price' as price
+       FROM transactions t
+       WHERE t.user_id = $1 AND t.type IN ('market_buy', 'market_sell')
+       ORDER BY t.created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+
+    res.json({
+      success: true,
+      history: historyResult.rows
+    });
+
+  } catch (error: unknown) {
+    console.error('Get market history error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка получения истории' });
   }
 });
 
