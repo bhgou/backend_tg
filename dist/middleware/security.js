@@ -86,3 +86,4 @@ const sqlInjectionProtection = (req, res, next) => {
     next();
 };
 exports.sqlInjectionProtection = sqlInjectionProtection;
+//# sourceMappingURL=security.js.map

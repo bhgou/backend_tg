@@ -33,6 +33,9 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
     const userId = req.user!.id;
     const { package_id, payment_method = 'yookassa' } = req.body;
 
+    // Преобразуем package_id в число
+    const packageId = Number(package_id);
+    
     // Находим пакет
     const packages = [
       { id: 1, rub: 99, premium: 1000, bonus: 100 },
@@ -42,7 +45,7 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
       { id: 5, rub: 2999, premium: 45000, bonus: 15000 },
     ];
 
-    const selectedPackage = packages.find(p => p.id === package_id);
+    const selectedPackage = packages.find(p => p.id === packageId);
     if (!selectedPackage) {
       return res.status(400).json({ error: 'Пакет не найден' });
     }
@@ -63,7 +66,7 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
         payment_method,
         paymentId,
         JSON.stringify({
-          package_id,
+          package_id: packageId,
           base_premium: selectedPackage.premium,
           bonus: selectedPackage.bonus,
           description: `Пополнение ${selectedPackage.premium + selectedPackage.bonus} GC`
@@ -98,7 +101,7 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
         return_url: `${process.env.FRONTEND_URL}/payment/success`,
         metadata: {
           userId,
-          packageId: package_id
+          packageId
         }
       };
 
@@ -124,7 +127,7 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
 router.post('/webhook/:provider', async (req: Request<{ provider: string }>, res: Response) => {
   try {
     const { provider } = req.params;
-    const { payment_id, status, amount, currency } = req.body;
+    const { payment_id, status, amount } = req.body;
 
     console.log(`Webhook from ${provider}:`, { payment_id, status, amount });
 
@@ -211,7 +214,7 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
 });
 
 // Вспомогательная функция для завершения платежа
-async function completePayment(paymentId: string, userId: number) {
+async function completePayment(paymentId: string, userId: string | number) {
   const client = await pool.connect();
   
   try {

@@ -33,6 +33,8 @@ router.post('/create', auth_1.authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
         const { package_id, payment_method = 'yookassa' } = req.body;
+        // Преобразуем package_id в число
+        const packageId = Number(package_id);
         // Находим пакет
         const packages = [
             { id: 1, rub: 99, premium: 1000, bonus: 100 },
@@ -41,7 +43,7 @@ router.post('/create', auth_1.authenticate, async (req, res) => {
             { id: 4, rub: 1199, premium: 16000, bonus: 4000 },
             { id: 5, rub: 2999, premium: 45000, bonus: 15000 },
         ];
-        const selectedPackage = packages.find(p => p.id === package_id);
+        const selectedPackage = packages.find(p => p.id === packageId);
         if (!selectedPackage) {
             return res.status(400).json({ error: 'Пакет не найден' });
         }
@@ -58,7 +60,7 @@ router.post('/create', auth_1.authenticate, async (req, res) => {
             payment_method,
             paymentId,
             JSON.stringify({
-                package_id,
+                package_id: packageId,
                 base_premium: selectedPackage.premium,
                 bonus: selectedPackage.bonus,
                 description: `Пополнение ${selectedPackage.premium + selectedPackage.bonus} GC`
@@ -90,7 +92,7 @@ router.post('/create', auth_1.authenticate, async (req, res) => {
                 return_url: `${process.env.FRONTEND_URL}/payment/success`,
                 metadata: {
                     userId,
-                    packageId: package_id
+                    packageId
                 }
             };
             // Здесь будет вызов API платежной системы
@@ -113,7 +115,7 @@ router.post('/create', auth_1.authenticate, async (req, res) => {
 router.post('/webhook/:provider', async (req, res) => {
     try {
         const { provider } = req.params;
-        const { payment_id, status, amount, currency } = req.body;
+        const { payment_id, status, amount } = req.body;
         console.log(`Webhook from ${provider}:`, { payment_id, status, amount });
         // Проверяем подпись (в реальном приложении)
         // const isValid = verifySignature(provider, req);
@@ -220,3 +222,4 @@ async function completePayment(paymentId, userId) {
     }
 }
 exports.default = router;
+//# sourceMappingURL=payment.routes.js.map

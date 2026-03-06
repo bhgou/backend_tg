@@ -618,3 +618,4 @@ router.get('/export/:type', async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=admin.routes.js.map

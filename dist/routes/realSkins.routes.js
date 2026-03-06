@@ -223,3 +223,4 @@ router.get('/fragments/progress', auth_1.authenticate, async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=realSkins.routes.js.map

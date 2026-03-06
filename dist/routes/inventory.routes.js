@@ -210,3 +210,4 @@ router.post('/cancel-sale', async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=inventory.routes.js.map

@@ -220,3 +220,4 @@ router.get('/stats', auth_1.authenticate, async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=channels.routes.js.map

@@ -17,11 +17,42 @@ class TelegramService {
             return;
         }
         try {
-            this.webhookUrl = `${config_1.config.server.nodeEnv === 'production'
-                ? config_1.config.server.url
-                : `http://localhost:${config_1.config.server.port}`}/api/bot/webhook`;
+            // Определяем URL для webhook
+            if (config_1.config.server.nodeEnv === 'production') {
+                // Приоритет переменных окружения для URL:
+                // 1. RENDER_EXTERNAL_URL (автоматически на Render)
+                // 2. BACKEND_URL (ручная настройка)
+                // 3. config.server.url (из конфига)
+                const renderUrl = process.env.RENDER_EXTERNAL_URL;
+                const backendUrl = process.env.BACKEND_URL;
+                const configUrl = config_1.config.server.url;
+                let httpsUrl = renderUrl || backendUrl || configUrl;
+                if (!httpsUrl) {
+                    console.error('❌ Не удалось определить URL для webhook!');
+                    console.error('Установите одну из переменных окружения:');
+                    console.error('  - RENDER_EXTERNAL_URL (автоматически на Render)');
+                    console.error('  - BACKEND_URL (ручная настройка)');
+                    return;
+                }
+                // Убеждаемся, что URL начинается с https://
+                if (httpsUrl.startsWith('http://')) {
+                    httpsUrl = httpsUrl.replace('http://', 'https://');
+                }
+                else if (!httpsUrl.startsWith('https://')) {
+                    httpsUrl = `https://${httpsUrl}`;
+                }
+                this.webhookUrl = `${httpsUrl}/api/bot/webhook`;
+            }
+            else {
+                // В разработке используем localhost
+                this.webhookUrl = `http://localhost:${config_1.config.server.port}/api/bot/webhook`;
+            }
             console.log('🤖 Telegram сервис инициализирован');
             console.log(`🌐 Webhook URL: ${this.webhookUrl}`);
+            console.log(`🔧 Environment: ${config_1.config.server.nodeEnv}`);
+            console.log(`📡 Backend URL: ${config_1.config.server.url}`);
+            console.log(`🔗 RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'not set'}`);
+            console.log(`🔗 BACKEND_URL: ${process.env.BACKEND_URL || 'not set'}`);
         }
         catch (error) {
             console.error('❌ Ошибка инициализации Telegram бота:', error);
@@ -43,9 +74,14 @@ class TelegramService {
         }
         try {
             if (config_1.config.server.nodeEnv === 'production') {
+                // Проверяем, что webhook URL начинается с https://
+                if (!this.webhookUrl.startsWith('https://')) {
+                    throw new Error(`Webhook URL должен начинаться с https://. Текущий URL: ${this.webhookUrl}`);
+                }
                 // В продакшене устанавливаем webhook через Express
                 await bot_1.default.telegram.setWebhook(this.webhookUrl);
                 console.log('🤖 Бот запущен в режиме webhook через Express');
+                console.log(`🔗 Webhook установлен: ${this.webhookUrl}`);
             }
             else {
                 // В разработке запускаем бота в режиме polling
@@ -56,6 +92,7 @@ class TelegramService {
         }
         catch (error) {
             console.error('❌ Ошибка запуска бота:', error);
+            throw error;
         }
     }
     async stopBot() {
@@ -99,3 +136,4 @@ class TelegramService {
 }
 exports.telegramService = TelegramService.getInstance();
 exports.default = exports.telegramService;
+//# sourceMappingURL=telegram.js.map

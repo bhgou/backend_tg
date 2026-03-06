@@ -522,3 +522,4 @@ router.get('/history', auth_1.authenticate, async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=minigame.routes.js.map

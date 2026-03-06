@@ -4,8 +4,8 @@ const telegraf_1 = require("telegraf");
 const config_1 = require("../config/config");
 const database_1 = require("../db/database");
 const BOT_TOKEN = config_1.config.telegram.botToken;
-const FRONTEND_URL = config_1.config.telegram.webAppUrl;
-const BOT_USERNAME = config_1.config.telegram.botUsername;
+const FRONTEND_URL = config_1.config.telegram.webAppUrl || 'https://backend-tg-4k2p.vercel.app/';
+const BOT_USERNAME = config_1.config.telegram.botUsername || 'SkinFactoryArBot';
 if (!BOT_TOKEN) {
     console.warn('⚠️ TELEGRAM_BOT_TOKEN не установлен. Бот не будет работать.');
 }
@@ -243,3 +243,4 @@ bot.catch((err, ctx) => {
     console.error(`Ошибка для ${ctx.updateType}:`, err);
 });
 exports.default = bot;
+//# sourceMappingURL=bot.js.map

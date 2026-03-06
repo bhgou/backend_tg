@@ -105,6 +105,15 @@ app.get('/api/health/db', async (req, res) => {
         });
     }
 });
+// Health check для Render (root route)
+app.get('/', (req, res) => {
+    res.json({
+        success: true,
+        status: 'ok',
+        app: config_1.config.app.name,
+        version: config_1.config.app.version
+    });
+});
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({
@@ -238,3 +247,4 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 startServer();
+//# sourceMappingURL=index.js.map

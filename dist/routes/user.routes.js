@@ -246,3 +246,4 @@ router.get('/referrals', async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=user.routes.js.map

@@ -11,7 +11,10 @@ const authenticate = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'Требуется аутентификация' });
+            return res.status(401).json({
+                success: false,
+                error: 'Требуется аутентификация'
+            });
         }
         const token = authHeader.split(' ')[1];
         // Проверяем JWT токен
@@ -19,7 +22,10 @@ const authenticate = async (req, res, next) => {
         // Проверяем, существует ли пользователь
         const userResult = await database_1.pool.query('SELECT id, telegram_id, username FROM users WHERE id = $1', [decoded.userId]);
         if (userResult.rows.length === 0) {
-            return res.status(401).json({ error: 'Пользователь не найден' });
+            return res.status(401).json({
+                success: false,
+                error: 'Пользователь не найден'
+            });
         }
         // Добавляем пользователя в запрос
         req.user = {
@@ -30,11 +36,18 @@ const authenticate = async (req, res, next) => {
         next();
     }
     catch (error) {
-        if (error instanceof jsonwebtoken_1.default.JsonWebTokenError) {
-            return res.status(401).json({ error: 'Неверный токен' });
+        if (error instanceof jsonwebtoken_1.default.JsonWebTokenError || error instanceof jsonwebtoken_1.default.TokenExpiredError) {
+            return res.status(401).json({
+                success: false,
+                error: 'Неверный или истекший токен'
+            });
         }
         console.error('Auth middleware error:', error);
-        res.status(500).json({ error: 'Ошибка аутентификации' });
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка аутентификации'
+        });
     }
 };
 exports.authenticate = authenticate;
+//# sourceMappingURL=auth.js.map

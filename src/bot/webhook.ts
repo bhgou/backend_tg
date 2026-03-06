@@ -1,11 +1,10 @@
-import express, { Request, Response } from 'express';
+import express, { Response } from 'express';
 import bot from './bot';
-import { config } from '../config/config';
 
 const router = express.Router();
 
 // Вебхук для Telegram
-router.post('/webhook', (req, res) => {
+router.post('/webhook', async (req, res: Response) => {
   try {
     // Проверяем, что данные существуют
     if (!req.body || Object.keys(req.body).length === 0) {
@@ -16,31 +15,21 @@ router.post('/webhook', (req, res) => {
     }
 
     // Обрабатываем обновление
-    bot.handleUpdate(req.body)
-      .then(() => {
-        res.json({ success: true, message: 'Update processed' });
-      })
-      .catch((error: Error) => {
-        console.error('Webhook handleUpdate error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: 'Error processing update',
-          message: error.message 
-        });
-      });
+    await bot.handleUpdate(req.body);
+    res.json({ success: true, message: 'Update processed' });
   } catch (error: unknown) {
-    console.error('Webhook error:', error);
+    console.error('Webhook handleUpdate error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ 
       success: false, 
-      error: 'Webhook processing error',
+      error: 'Error processing update',
       message: errorMessage 
     });
   }
 });
 
 // Проверка статуса вебхука
-router.get('/webhook', (req, res) => {
+router.get('/webhook', (_req, res: Response) => {
   res.json({ 
     success: true, 
     message: 'Webhook is working',
@@ -49,7 +38,7 @@ router.get('/webhook', (req, res) => {
 });
 
 // Удаление вебхука (для отладки)
-router.delete('/webhook', async (req, res) => {
+router.delete('/webhook', async (_req, res: Response) => {
   try {
     await bot.telegram.deleteWebhook();
     res.json({ 
@@ -68,7 +57,7 @@ router.delete('/webhook', async (req, res) => {
 });
 
 // Информация о вебхуке
-router.get('/webhook/info', async (req, res) => {
+router.get('/webhook/info', async (_req, res: Response) => {
   try {
     const webhookInfo = await bot.telegram.getWebhookInfo();
     res.json({ 

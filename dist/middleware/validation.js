@@ -24,3 +24,4 @@ const validateMarketListing = (req, res, next) => {
     next();
 };
 exports.validateMarketListing = validateMarketListing;
+//# sourceMappingURL=validation.js.map
